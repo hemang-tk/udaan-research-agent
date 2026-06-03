@@ -1,3 +1,11 @@
+# Architectural Design Document: Phase 2 — The Open Graph Gateway
+
+This document establishes the architectural layout and technical specifications for **Phase 2: The Open Graph Gateway (Broad Retrieval)** within the Academic Paper Discovery and Synthesis Engine.
+
+Phase 2 is the boundary layer between the system's internal pipeline and external academic databases. It is responsible for concurrently querying multiple massive pre-indexed graphs (e.g., OpenAlex, Semantic Scholar), normalizing chaotic external JSON schemas into a unified internal representation, and aggressively resolving duplicate records before passing the dataset to the heavy compute layers.
+
+---
+
 ## 1. Architectural Overview
 
 External academic APIs are notoriously inconsistent. They suffer from varying latency spikes, unannounced schema changes, and overlapping datasets. Phase 2 acts as a strict, resilient buffer. It guarantees that regardless of which external provider succeeds or fails, the downstream Phase 3 (Cross-Encoder Re-Ranking) always receives a pristine, deduplicated array of paper metadata.
