@@ -1,3 +1,11 @@
+# Architectural Design Document: Phase 1 — Query Orchestration & Translation
+
+This document establishes the architectural layout and technical specifications for **Phase 1: Query Orchestration & Translation** within the Academic Paper Discovery and Synthesis Engine.
+
+Phase 1 serves as the ingest gateway for natural language user intent, translating unstructured queries into highly optimized structured payloads optimized for legacy academic graph APIs and dense vector search engines.
+
+---
+
 ## 1. Architectural Overview
 
 Natural language research queries are often conversational, ambiguous, or conceptually clustered. Conversely, public academic graphs (such as OpenAlex and Semantic Scholar) rely on precise lexical parameters, boolean operators, or constrained entity filters.
