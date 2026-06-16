@@ -101,3 +101,28 @@ class PrioritizedIngestionIndex(_Base):
     total_processed: int = Field(alias="totalProcessed", ge=0)
     total_filtered: int = Field(alias="totalFiltered", ge=0)
     ranked_manifest: list[RankedPaper] = Field(alias="rankedManifest")
+
+
+# --- Phase 4: ResolutionManifest ---
+class MetadataSnapshot(_Base):
+    title: str
+
+
+class ResolutionSummary(_Base):
+    total_requested: int = Field(alias="totalRequested", ge=0)
+    successfully_resolved: int = Field(alias="successfullyResolved", ge=0)
+    paywalled: int = Field(ge=0)
+
+
+class ResolutionManifestEntry(_Base):
+    internal_id: str = Field(alias="internalId")
+    doi: str | None
+    status: ResolutionStatus
+    storage_pointer: str | None = Field(alias="storagePointer")
+    metadata_snapshot: MetadataSnapshot = Field(alias="metadataSnapshot")
+
+
+class ResolutionManifest(_Base):
+    project_id: str = Field(alias="projectId")
+    resolution_summary: ResolutionSummary = Field(alias="resolutionSummary")
+    manifest: list[ResolutionManifestEntry]

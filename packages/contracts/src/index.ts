@@ -81,3 +81,22 @@ export interface PrioritizedIngestionIndex {
   totalFiltered: number;
   rankedManifest: RankedPaper[];
 }
+
+// --- Phase 4: ResolutionManifest ---
+export interface ResolutionManifestEntry {
+  internalId: string;
+  doi: string | null;
+  status: ResolutionStatus;
+  storagePointer: string | null;
+  metadataSnapshot: { title: string };
+}
+
+export interface ResolutionManifest {
+  projectId: string;
+  resolutionSummary: {
+    totalRequested: number;
+    successfullyResolved: number;
+    paywalled: number;
+  };
+  manifest: ResolutionManifestEntry[];
+}

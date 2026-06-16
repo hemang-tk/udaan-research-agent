@@ -3,9 +3,13 @@ from .models import (
     ClaimClassification,
     ClusterPolarity,
     CompiledDiscoveryManifest,
+    MetadataSnapshot,
     PrioritizedIngestionIndex,
     RankedPaper,
+    ResolutionManifest,
+    ResolutionManifestEntry,
     ResolutionStatus,
+    ResolutionSummary,
 )
 
 __all__ = [
@@ -13,7 +17,11 @@ __all__ = [
     "ClaimClassification",
     "ClusterPolarity",
     "CompiledDiscoveryManifest",
+    "MetadataSnapshot",
     "PrioritizedIngestionIndex",
     "RankedPaper",
+    "ResolutionManifest",
+    "ResolutionManifestEntry",
     "ResolutionStatus",
+    "ResolutionSummary",
 ]

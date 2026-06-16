@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://udaan.dev/schema/resolution-manifest.json",
+  "title": "ResolutionManifest",
+  "description": "Phase 4 (JIT Full-Text Resolution) output, consumed by Phase 5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projectId", "resolutionSummary", "manifest"],
+  "properties": {
+    "projectId": { "type": "string" },
+    "resolutionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalRequested", "successfullyResolved", "paywalled"],
+      "properties": {
+        "totalRequested": { "type": "integer", "minimum": 0 },
+        "successfullyResolved": { "type": "integer", "minimum": 0 },
+        "paywalled": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "manifest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["internalId", "doi", "status", "storagePointer", "metadataSnapshot"],
+        "properties": {
+          "internalId": { "type": "string" },
+          "doi": { "type": ["string", "null"] },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "RESOLVED_CACHE", "RESOLVED_DOWNLOAD", "PAYWALLED", "FAILED_CORRUPTED"]
+          },
+          "storagePointer": { "type": ["string", "null"] },
+          "metadataSnapshot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title"],
+            "properties": { "title": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}
