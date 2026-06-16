@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://udaan.dev/schema/synthesis-graph.json",
+  "title": "SynthesisGraph",
+  "description": "Phase 6 (Cross-Source Synthesis & Polarity) output, consumed by Phase 7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projectId", "synthesisGraph"],
+  "properties": {
+    "projectId": { "type": "string" },
+    "synthesisGraph": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["clusterId", "generatedTopicLabel", "polarity", "claims"],
+        "properties": {
+          "clusterId": { "type": "string" },
+          "generatedTopicLabel": { "type": "string" },
+          "polarity": {
+            "type": "string",
+            "enum": ["AGREEMENT", "CONTRADICTION", "THIN_EVIDENCE", "NOISE"]
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["claimId", "doi", "text"],
+              "properties": {
+                "claimId": { "type": "string" },
+                "doi": { "type": ["string", "null"] },
+                "text": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

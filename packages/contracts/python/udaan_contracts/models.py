@@ -145,3 +145,22 @@ class ValidatedClaim(_Base):
     source_quote: str = Field(alias="sourceQuote")
     lineage: ClaimLineage
     vector_embedding: list[float] | None = Field(default=None, alias="vectorEmbedding")
+
+
+# --- Phase 6: SynthesisGraph ---
+class SynthesisClaimRef(_Base):
+    claim_id: str = Field(alias="claimId")
+    doi: str | None
+    text: str
+
+
+class SynthesisCluster(_Base):
+    cluster_id: str = Field(alias="clusterId")
+    generated_topic_label: str = Field(alias="generatedTopicLabel")
+    polarity: ClusterPolarity
+    claims: list[SynthesisClaimRef]
+
+
+class SynthesisGraph(_Base):
+    project_id: str = Field(alias="projectId")
+    synthesis_graph: list[SynthesisCluster] = Field(alias="synthesisGraph")

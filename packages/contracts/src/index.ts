@@ -120,3 +120,22 @@ export interface ValidatedClaim {
   lineage: ClaimLineage;
   vectorEmbedding?: number[] | null;
 }
+
+// --- Phase 6: SynthesisGraph ---
+export interface SynthesisClaimRef {
+  claimId: string;
+  doi: string | null;
+  text: string;
+}
+
+export interface SynthesisCluster {
+  clusterId: string;
+  generatedTopicLabel: string;
+  polarity: ClusterPolarity;
+  claims: SynthesisClaimRef[];
+}
+
+export interface SynthesisGraph {
+  projectId: string;
+  synthesisGraph: SynthesisCluster[];
+}

@@ -11,6 +11,9 @@ from .models import (
     ResolutionManifestEntry,
     ResolutionStatus,
     ResolutionSummary,
+    SynthesisClaimRef,
+    SynthesisCluster,
+    SynthesisGraph,
     ValidatedClaim,
 )
 
@@ -27,5 +30,8 @@ __all__ = [
     "ResolutionManifestEntry",
     "ResolutionStatus",
     "ResolutionSummary",
+    "SynthesisClaimRef",
+    "SynthesisCluster",
+    "SynthesisGraph",
     "ValidatedClaim",
 ]
