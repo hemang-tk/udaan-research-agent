@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://udaan.dev/schema/research-brief.json",
+  "title": "ResearchBrief",
+  "description": "Phase 7 (Constrained Generation & Citation Weaving) output: the final deliverable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projectId", "metadata", "sections", "bibliography"],
+  "properties": {
+    "projectId": { "type": "string" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalClaims", "sectionsGenerated"],
+      "properties": {
+        "totalClaims": { "type": "integer", "minimum": 0 },
+        "sectionsGenerated": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["heading", "bodyText"],
+        "properties": {
+          "heading": { "type": "string" },
+          "bodyText": { "type": "string" }
+        }
+      }
+    },
+    "bibliography": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claimId", "doi", "text"],
+        "properties": {
+          "claimId": { "type": "string" },
+          "doi": { "type": ["string", "null"] },
+          "text": { "type": "string" }
+        }
+      }
+    }
+  }
+}

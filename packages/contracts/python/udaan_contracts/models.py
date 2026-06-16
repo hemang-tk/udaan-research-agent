@@ -164,3 +164,27 @@ class SynthesisCluster(_Base):
 class SynthesisGraph(_Base):
     project_id: str = Field(alias="projectId")
     synthesis_graph: list[SynthesisCluster] = Field(alias="synthesisGraph")
+
+
+# --- Phase 7: ResearchBrief ---
+class BibliographyEntry(_Base):
+    claim_id: str = Field(alias="claimId")
+    doi: str | None
+    text: str
+
+
+class BriefSection(_Base):
+    heading: str
+    body_text: str = Field(alias="bodyText")
+
+
+class BriefMetadata(_Base):
+    total_claims: int = Field(alias="totalClaims", ge=0)
+    sections_generated: int = Field(alias="sectionsGenerated", ge=0)
+
+
+class ResearchBrief(_Base):
+    project_id: str = Field(alias="projectId")
+    metadata: BriefMetadata
+    sections: list[BriefSection]
+    bibliography: dict[str, BibliographyEntry]

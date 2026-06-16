@@ -139,3 +139,22 @@ export interface SynthesisGraph {
   projectId: string;
   synthesisGraph: SynthesisCluster[];
 }
+
+// --- Phase 7: ResearchBrief ---
+export interface BibliographyEntry {
+  claimId: string;
+  doi: string | null;
+  text: string;
+}
+
+export interface BriefSection {
+  heading: string;
+  bodyText: string;
+}
+
+export interface ResearchBrief {
+  projectId: string;
+  metadata: { totalClaims: number; sectionsGenerated: number };
+  sections: BriefSection[];
+  bibliography: Record<string, BibliographyEntry>;
+}

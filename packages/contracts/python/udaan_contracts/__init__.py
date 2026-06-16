@@ -1,4 +1,7 @@
 from .models import (
+    BibliographyEntry,
+    BriefMetadata,
+    BriefSection,
     CandidatePaper,
     ClaimClassification,
     ClaimLineage,
@@ -7,6 +10,7 @@ from .models import (
     MetadataSnapshot,
     PrioritizedIngestionIndex,
     RankedPaper,
+    ResearchBrief,
     ResolutionManifest,
     ResolutionManifestEntry,
     ResolutionStatus,
@@ -18,6 +22,9 @@ from .models import (
 )
 
 __all__ = [
+    "BibliographyEntry",
+    "BriefMetadata",
+    "BriefSection",
     "CandidatePaper",
     "ClaimClassification",
     "ClaimLineage",
@@ -26,6 +33,7 @@ __all__ = [
     "MetadataSnapshot",
     "PrioritizedIngestionIndex",
     "RankedPaper",
+    "ResearchBrief",
     "ResolutionManifest",
     "ResolutionManifestEntry",
     "ResolutionStatus",
