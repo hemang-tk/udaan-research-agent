@@ -4,7 +4,7 @@
  * real bucket at deploy via the same config (storagePointer stays s3://...).
  */
 
-import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { S3Config } from "@udaan/shared";
 import type { ObjectStore } from "./types.js";
 
@@ -21,6 +21,10 @@ export class InMemoryObjectStore implements ObjectStore {
 
   async exists(key: string): Promise<boolean> {
     return this.store.has(key);
+  }
+
+  async get(key: string): Promise<Uint8Array | null> {
+    return this.store.get(key) ?? null;
   }
 
   async put(key: string, bytes: Uint8Array, _contentType?: string): Promise<string> {
@@ -56,6 +60,16 @@ export class S3ObjectStore implements ObjectStore {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async get(key: string): Promise<Uint8Array | null> {
+    try {
+      const res = await this.client.send(new GetObjectCommand({ Bucket: this.s3.bucket, Key: key }));
+      if (!res.Body) return null;
+      return await res.Body.transformToByteArray();
+    } catch {
+      return null;
     }
   }
 

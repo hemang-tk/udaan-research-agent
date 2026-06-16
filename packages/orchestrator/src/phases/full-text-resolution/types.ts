@@ -6,6 +6,8 @@ export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promis
 export interface ObjectStore {
   /** Track A cache check. */
   exists(key: string): Promise<boolean>;
+  /** Fetch stored bytes (e.g. to hand a resolved PDF to the parser). */
+  get(key: string): Promise<Uint8Array | null>;
   /** Stream/store bytes; returns the storage pointer. */
   put(key: string, bytes: Uint8Array, contentType: string): Promise<string>;
   /** s3://bucket/key pointer for a key. */
