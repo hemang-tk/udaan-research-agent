@@ -126,3 +126,22 @@ class ResolutionManifest(_Base):
     project_id: str = Field(alias="projectId")
     resolution_summary: ResolutionSummary = Field(alias="resolutionSummary")
     manifest: list[ResolutionManifestEntry]
+
+
+# --- Phase 5: ValidatedClaim ---
+class ClaimLineage(_Base):
+    section: str
+    sub_section: str | None = Field(default=None, alias="subSection")
+    page_number: int = Field(alias="pageNumber", ge=0)
+    structural_node_type: str = Field(alias="structuralNodeType")
+
+
+class ValidatedClaim(_Base):
+    claim_id: str = Field(alias="claimId")
+    project_id: str = Field(alias="projectId")
+    document_doi: str | None = Field(alias="documentDoi")
+    claim_classification: ClaimClassification = Field(alias="claimClassification")
+    claim_text: str = Field(alias="claimText")
+    source_quote: str = Field(alias="sourceQuote")
+    lineage: ClaimLineage
+    vector_embedding: list[float] | None = Field(default=None, alias="vectorEmbedding")

@@ -1,6 +1,7 @@
 from .models import (
     CandidatePaper,
     ClaimClassification,
+    ClaimLineage,
     ClusterPolarity,
     CompiledDiscoveryManifest,
     MetadataSnapshot,
@@ -10,11 +11,13 @@ from .models import (
     ResolutionManifestEntry,
     ResolutionStatus,
     ResolutionSummary,
+    ValidatedClaim,
 )
 
 __all__ = [
     "CandidatePaper",
     "ClaimClassification",
+    "ClaimLineage",
     "ClusterPolarity",
     "CompiledDiscoveryManifest",
     "MetadataSnapshot",
@@ -24,4 +27,5 @@ __all__ = [
     "ResolutionManifestEntry",
     "ResolutionStatus",
     "ResolutionSummary",
+    "ValidatedClaim",
 ]

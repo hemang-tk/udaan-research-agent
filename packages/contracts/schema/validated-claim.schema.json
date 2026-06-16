@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://udaan.dev/schema/validated-claim.json",
+  "title": "ValidatedClaim",
+  "description": "Phase 5 (Ingestion & Parsing) atomic output: a quote-anchored claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claimId", "projectId", "documentDoi", "claimClassification", "claimText", "sourceQuote", "lineage"],
+  "properties": {
+    "claimId": { "type": "string" },
+    "projectId": { "type": "string" },
+    "documentDoi": { "type": ["string", "null"] },
+    "claimClassification": {
+      "type": "string",
+      "enum": ["FINDING", "HYPOTHESIS", "LIMITATION", "METHODOLOGY"]
+    },
+    "claimText": { "type": "string" },
+    "sourceQuote": {
+      "type": "string",
+      "description": "Exact, unmodified substring of the source chunk (verified deterministically)."
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "pageNumber", "structuralNodeType"],
+      "properties": {
+        "section": { "type": "string" },
+        "subSection": { "type": ["string", "null"] },
+        "pageNumber": { "type": "integer", "minimum": 0 },
+        "structuralNodeType": { "type": "string" }
+      }
+    },
+    "vectorEmbedding": {
+      "type": ["array", "null"],
+      "items": { "type": "number" }
+    }
+  }
+}

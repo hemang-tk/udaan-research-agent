@@ -100,3 +100,23 @@ export interface ResolutionManifest {
   };
   manifest: ResolutionManifestEntry[];
 }
+
+// --- Phase 5: ValidatedClaim ---
+export interface ClaimLineage {
+  section: string;
+  subSection?: string | null;
+  pageNumber: number;
+  structuralNodeType: string;
+}
+
+export interface ValidatedClaim {
+  claimId: string;
+  projectId: string;
+  documentDoi: string | null;
+  claimClassification: ClaimClassification;
+  claimText: string;
+  /** Exact, unmodified substring of the source chunk. */
+  sourceQuote: string;
+  lineage: ClaimLineage;
+  vectorEmbedding?: number[] | null;
+}
