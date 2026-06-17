@@ -5,7 +5,7 @@
  * can stream it (SSE). This same function is the body of the BullMQ worker.
  */
 
-import type { ResearchBrief } from "@udaan/contracts";
+import type { ResearchBrief, ResolutionManifestEntry } from "@udaan/contracts";
 import type { LLMProvider } from "@udaan/shared";
 import { orchestrateQuery, type QueryCache, type ResearchQueryRequest } from "../phases/query-orchestration/index.js";
 import { runGateway } from "../phases/open-graph-gateway/index.js";
@@ -32,6 +32,8 @@ export interface PipelineDeps {
   synthesis: SynthesisService;
   fetchImpl?: FetchLike;
   onProgress?: (event: ProgressEvent) => void;
+  /** Called after Phase 4 with papers that could not be resolved (paywalled). */
+  onPaywalled?: (entries: ResolutionManifestEntry[]) => void;
 }
 
 export type PipelineResult =
@@ -75,6 +77,9 @@ export async function runPipeline(
     fetchImpl: deps.fetchImpl,
   });
   emit(4, "Full-Text Resolution", "done", `${resolution.resolutionSummary.successfullyResolved} resolved`);
+
+  const paywalled = resolution.manifest.filter((e) => e.status === "PAYWALLED");
+  if (paywalled.length > 0) deps.onPaywalled?.(paywalled);
 
   // Phase 5 — Ingestion & Parsing (service); feed each resolved PDF's bytes.
   emit(5, "Ingestion & Parsing", "start");

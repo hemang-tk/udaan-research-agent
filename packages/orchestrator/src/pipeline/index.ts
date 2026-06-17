@@ -11,10 +11,12 @@ export * from "./clients.js";
 export { runPipeline, type PipelineDeps, type PipelineResult, type ProgressEvent } from "./runPipeline.js";
 
 /** Construct real pipeline dependencies from config (used by the API/worker). */
-export function buildPipelineDeps(
-  config: Config,
-  onProgress?: (event: ProgressEvent) => void,
-): PipelineDeps {
+export interface BuildDepsHooks {
+  onProgress?: PipelineDeps["onProgress"];
+  onPaywalled?: PipelineDeps["onPaywalled"];
+}
+
+export function buildPipelineDeps(config: Config, hooks: BuildDepsHooks = {}): PipelineDeps {
   registerOllama();
   return {
     llm: createLLMProvider(config),
@@ -24,6 +26,7 @@ export function buildPipelineDeps(
     parsing: new HttpParsingService(config.services.parsing),
     synthesis: new HttpSynthesisService(config.services.synthesis),
     store: new S3ObjectStore(config.s3),
-    onProgress,
+    onProgress: hooks.onProgress,
+    onPaywalled: hooks.onPaywalled,
   };
 }

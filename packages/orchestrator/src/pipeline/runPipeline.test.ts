@@ -24,8 +24,17 @@ const CANDIDATE: CandidatePaper = {
   sourceUrls: ["https://openalex.org/p1"],
 };
 
+// A non-arXiv paper with no OA location -> resolves to PAYWALLED.
+const PAYWALLED: CandidatePaper = {
+  ...CANDIDATE,
+  internalId: "p2",
+  doi: "10.1145/closed",
+  title: "Bounded latency via ephemeral caching",
+  sourceUrls: ["https://dl.acm.org/p2"],
+};
+
 // --- fakes for the in-proc TS phases that need external I/O ---
-const adapter: OpenGraphProvider = { name: "Fake", search: async () => [CANDIDATE] };
+const adapter: OpenGraphProvider = { name: "Fake", search: async () => [CANDIDATE, PAYWALLED] };
 
 const pdfFetch: FetchLike = async () =>
   new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]), {
@@ -91,6 +100,7 @@ const llm: LLMProvider = {
 describe("runPipeline (end-to-end)", () => {
   it("chains all seven phases into a sourced brief", async () => {
     const events: ProgressEvent[] = [];
+    const paywalled: { internalId: string }[] = [];
     const result = await runPipeline(
       { userId: "u", projectId: "proj_1", rawQuery: "How does micro-caching affect latency since 2022?", timestamp: "2026-06-16T00:00:00Z" },
       {
@@ -103,14 +113,16 @@ describe("runPipeline (end-to-end)", () => {
         synthesis,
         fetchImpl: pdfFetch,
         onProgress: (e) => events.push(e),
+        onPaywalled: (entries) => paywalled.push(...entries),
       },
     );
 
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
 
-    // The PDF was resolved (arXiv), stored, and handed to the parser.
+    // One paper resolved (arXiv) + handed to the parser; one was paywalled.
     expect(ingestCalls).toBe(1);
+    expect(paywalled.map((e) => e.internalId)).toEqual(["p2"]);
     // Brief is produced with woven citations and no raw tags.
     expect(result.brief.sections.length).toBeGreaterThan(0);
     expect(result.brief.sections.map((s) => s.bodyText).join(" ")).not.toContain("[cl_");
