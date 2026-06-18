@@ -3,16 +3,32 @@ claims and returns the SynthesisGraph."""
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 from udaan_shared import create_llm_provider, load_config, register_defaults
 
+from .clustering import cluster_quality
 from .source import ClaimSource, InMemoryClaimSource, QdrantClaimSource
 from .synthesize import synthesize
 
 register_defaults()
 
+_log = logging.getLogger("udaan.synthesis")
+_quality_logged = False
+
 app = FastAPI(title="Udaan Synthesis (Phase 6)")
+
+
+def stage_quality() -> list[dict]:
+    """Report the active clustering implementation and whether degraded (#17)."""
+    global _quality_logged
+    implementation, degraded = cluster_quality()
+    if degraded and not _quality_logged:
+        _log.warning("Synthesis is running a DEGRADED fallback clusterer: %s", implementation)
+        _quality_logged = True
+    return [{"stage": "clustering", "implementation": implementation, "degraded": degraded}]
 
 _llm = None
 _source: ClaimSource | None = None
@@ -37,8 +53,12 @@ class SynthesizeRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    try:
+        stages = stage_quality()
+    except Exception:
+        stages = []
+    return {"status": "ok", "stages": stages}
 
 
 @app.post("/synthesize")

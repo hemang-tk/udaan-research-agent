@@ -29,6 +29,9 @@ def _tokens(text: str) -> set[str]:
 
 class LexicalReranker:
     method = "LEXICAL_FALLBACK"
+    # Jaccard overlap, no semantics — a run using it is DEGRADED (issue #17).
+    degraded = True
+    implementation = "lexical"
 
     def rerank(self, query: str, documents: list[str]) -> list[tuple[int, float]]:
         q = _tokens(query)
@@ -42,6 +45,8 @@ class LexicalReranker:
 
 class CrossEncoderReranker:
     method = "CROSS_ENCODER"
+    degraded = False
+    implementation = "cross-encoder"
 
     def __init__(self, model_name: str) -> None:
         from sentence_transformers import CrossEncoder  # lazy: requires `ml` extra
@@ -57,6 +62,8 @@ class CrossEncoderReranker:
 
 class CohereReranker:
     method = "CROSS_ENCODER"
+    degraded = False
+    implementation = "cohere"
 
     def __init__(self, config: Config) -> None:
         self._key = config.api_keys.get("cohere")

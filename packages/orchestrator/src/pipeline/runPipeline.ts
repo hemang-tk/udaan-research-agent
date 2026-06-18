@@ -47,6 +47,24 @@ export async function runPipeline(
   const emit = (phase: number, name: string, status: "start" | "done", detail?: string) =>
     deps.onProgress?.({ phase, name, status, detail });
 
+  // Provider quality (issue #17): probe each service for the implementation each
+  // stage is running, so a run on the no-ML install can flag degraded output
+  // (logs + API + UI) instead of silently shipping a misleading brief.
+  const stageQuality = (
+    await Promise.all([
+      deps.ranking.quality?.() ?? Promise.resolve([]),
+      deps.parsing.quality?.() ?? Promise.resolve([]),
+      deps.synthesis.quality?.() ?? Promise.resolve([]),
+    ])
+  ).flat();
+  const degradedStages = stageQuality.filter((q) => q.degraded).map((q) => q.stage);
+  emit(
+    0,
+    "Provider Quality",
+    "done",
+    degradedStages.length > 0 ? `degraded: ${degradedStages.join(", ")}` : "all stages nominal",
+  );
+
   // Phase 1 — Query Orchestration
   emit(1, "Query Orchestration", "start");
   const compiled = await orchestrateQuery(request, { llm: deps.llm, cache: deps.cache });
@@ -103,6 +121,10 @@ export async function runPipeline(
   emit(7, "Generation & Citation Weaving", "start");
   const brief = await runGeneration(graph, { llm: deps.llm });
   emit(7, "Generation & Citation Weaving", "done", `${brief.sections.length} sections`);
+
+  // Stamp the degraded-mode result onto the brief so the API/UI can surface it.
+  brief.metadata.degraded = degradedStages.length > 0;
+  brief.metadata.degradedStages = degradedStages;
 
   return { status: "ok", brief };
 }

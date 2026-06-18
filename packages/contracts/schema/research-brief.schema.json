@@ -11,10 +11,19 @@
     "metadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["totalClaims", "sectionsGenerated"],
+      "required": ["totalClaims", "sectionsGenerated", "degraded", "degradedStages"],
       "properties": {
         "totalClaims": { "type": "integer", "minimum": 0 },
-        "sectionsGenerated": { "type": "integer", "minimum": 0 }
+        "sectionsGenerated": { "type": "integer", "minimum": 0 },
+        "degraded": {
+          "type": "boolean",
+          "description": "True if any stage ran on a low-quality fallback implementation."
+        },
+        "degradedStages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Stages that used a fallback (e.g. embedding, rerank, clustering, parsing)."
+        }
       }
     },
     "sections": {

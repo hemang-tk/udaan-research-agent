@@ -7,7 +7,7 @@ export const SAMPLE_QUERY =
 
 export const SAMPLE_BRIEF: ResearchBrief = {
   projectId: "sample",
-  metadata: { totalClaims: 3, sectionsGenerated: 3 },
+  metadata: { totalClaims: 3, sectionsGenerated: 3, degraded: false, degradedStages: [] },
   sections: [
     {
       heading: "Executive Summary",

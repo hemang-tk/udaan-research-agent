@@ -26,8 +26,18 @@ function withCitations(text: string): ReactNode[] {
 export function Brief({ brief }: { brief: ResearchBrief }) {
   const refs = Object.entries(brief.bibliography).sort((a, b) => Number(a[0]) - Number(b[0]));
 
+  const { degraded, degradedStages } = brief.metadata;
+
   return (
     <article className="brief" aria-label="Research brief">
+      {degraded && (
+        <div className="brief__degraded" role="alert">
+          <strong>Degraded mode.</strong> This brief was produced with low-quality
+          fallback implementations
+          {degradedStages.length > 0 ? ` for: ${degradedStages.join(", ")}` : ""}. Results may
+          be unreliable — install the ML extras for full-quality output.
+        </div>
+      )}
       <header className="brief__meta">
         <span className="brief__metaItem">
           <strong>{brief.metadata.totalClaims}</strong> sourced claims

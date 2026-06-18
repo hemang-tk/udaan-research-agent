@@ -43,3 +43,44 @@ def greedy_cluster(vectors: list[list[float]], threshold: float = DEFAULT_THRESH
             clusters[best_cluster].append(i)
 
     return clusters
+
+
+def cluster_quality() -> tuple[str, bool]:
+    """Report the active clusterer and whether it is the degraded fallback
+    (issue #17): scikit-learn Agglomerative when present, else greedy cosine."""
+    try:
+        import sklearn  # noqa: F401
+
+        return "agglomerative", False
+    except Exception:
+        return "greedy", True
+
+
+def _agglomerative_cluster(vectors: list[list[float]], threshold: float) -> list[list[int]]:
+    from sklearn.cluster import AgglomerativeClustering
+
+    if not vectors:
+        return []
+    if len(vectors) == 1:
+        return [[0]]
+    model = AgglomerativeClustering(
+        n_clusters=None,
+        metric="cosine",
+        linkage="average",
+        distance_threshold=1.0 - threshold,
+    )
+    labels = model.fit_predict(vectors)
+    groups: dict[int, list[int]] = {}
+    for index, label in enumerate(labels):
+        groups.setdefault(int(label), []).append(index)
+    # Preserve first-appearance order for determinism.
+    return [groups[label] for label in sorted(groups, key=lambda lbl: min(groups[lbl]))]
+
+
+def cluster_vectors(vectors: list[list[float]], threshold: float = DEFAULT_THRESHOLD) -> list[list[int]]:
+    """Cluster claim vectors with the best available implementation, falling back
+    to the deterministic greedy clusterer when scikit-learn is absent."""
+    try:
+        return _agglomerative_cluster(vectors, threshold)
+    except Exception:
+        return greedy_cluster(vectors, threshold)

@@ -11,7 +11,7 @@ from udaan_contracts import (
     ValidatedClaim,
 )
 
-from .clustering import DEFAULT_THRESHOLD, greedy_cluster
+from .clustering import DEFAULT_THRESHOLD, cluster_vectors
 from .polarity import fallback_label, judge_cluster
 
 MIN_CLUSTER_SIZE = 2
@@ -28,7 +28,7 @@ def synthesize(
     # Only FINDINGs with embeddings participate in consensus clustering.
     findings = [c for c in claims if c.claim_classification == "FINDING" and c.vector_embedding]
     vectors = [c.vector_embedding for c in findings]
-    groups = greedy_cluster(vectors, similarity_threshold)
+    groups = cluster_vectors(vectors, similarity_threshold)
 
     graph: list[SynthesisCluster] = []
     for index, member_indices in enumerate(groups, start=1):

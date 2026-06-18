@@ -42,7 +42,12 @@ class OllamaLLMProvider:
 
 
 class HashingEmbeddingProvider:
-    """Hashing-trick embedding (deterministic, offline fallback)."""
+    """Hashing-trick embedding (deterministic, offline fallback). Produces
+    semantically meaningless vectors, so a run using it is DEGRADED (issue #17)."""
+
+    # Quality markers read by the service /health probes.
+    degraded = True
+    implementation = "hashing"
 
     def __init__(self, dim: int = 384) -> None:
         self.dim = dim

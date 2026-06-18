@@ -46,7 +46,12 @@ def _candidate(internal_id: str, title: str, abstract: str) -> dict:
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    # /health now also reports per-stage implementation quality (issue #17).
+    stages = {s["stage"]: s for s in body["stages"]}
+    assert "rerank" in stages
+    assert isinstance(stages["rerank"]["degraded"], bool)
 
 
 def test_rerank_endpoint_returns_camelcase_manifest(client):

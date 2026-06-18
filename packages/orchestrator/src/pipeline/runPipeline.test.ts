@@ -128,9 +128,52 @@ describe("runPipeline (end-to-end)", () => {
     expect(result.brief.sections.map((s) => s.bodyText).join(" ")).not.toContain("[cl_");
     expect(result.brief.bibliography["1"]).toBeDefined();
 
-    // Progress reported every phase 1..7.
-    const donePhases = new Set(events.filter((e) => e.status === "done").map((e) => e.phase));
+    // No fake reports a fallback, so the brief is not flagged degraded.
+    expect(result.brief.metadata.degraded).toBe(false);
+    expect(result.brief.metadata.degradedStages).toEqual([]);
+
+    // Progress reported every phase 1..7 (phase 0 is the provider-quality probe).
+    const donePhases = new Set(
+      events.filter((e) => e.status === "done" && e.phase >= 1).map((e) => e.phase),
+    );
     expect([...donePhases].sort()).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("flags degraded mode when a service reports a fallback implementation", async () => {
+    const events: ProgressEvent[] = [];
+    const degradedParsing: ParsingService = {
+      ingest: async () => ({ claimsExtracted: 1 }),
+      quality: async () => [
+        { stage: "embedding", implementation: "hashing", degraded: true },
+        { stage: "parsing", implementation: "pypdf", degraded: true },
+      ],
+    };
+    const degradedSynthesis: SynthesisService = {
+      ...synthesis,
+      quality: async () => [{ stage: "clustering", implementation: "greedy", degraded: true }],
+    };
+    const result = await runPipeline(
+      { userId: "u", projectId: "proj_1", rawQuery: "How does micro-caching affect latency since 2022?", timestamp: "2026-06-16T00:00:00Z" },
+      {
+        llm,
+        cache: new InMemoryQueryCache(),
+        adapters: [adapter],
+        ranking,
+        store: new InMemoryObjectStore(),
+        parsing: degradedParsing,
+        synthesis: degradedSynthesis,
+        fetchImpl: pdfFetch,
+        onProgress: (e) => events.push(e),
+      },
+    );
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.brief.metadata.degraded).toBe(true);
+    expect(result.brief.metadata.degradedStages.sort()).toEqual(["clustering", "embedding", "parsing"]);
+    // The provider-quality event names the degraded stages.
+    const quality = events.find((e) => e.phase === 0);
+    expect(quality?.detail).toContain("embedding");
   });
 
   it("short-circuits on a rejected query", async () => {

@@ -694,3 +694,20 @@ a {
     scroll-behavior: auto;
   }
 }
+
+/* Degraded-mode banner (issue #17): a run used low-quality fallback providers. */
+.brief__degraded {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--conflict);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #fdecea;
+  color: var(--conflict);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.brief__degraded strong {
+  font-family: var(--font-display);
+}

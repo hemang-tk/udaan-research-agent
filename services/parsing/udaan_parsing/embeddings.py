@@ -13,6 +13,10 @@ def register_sentence_transformers() -> bool:
         return False
 
     class STEmbeddingProvider:
+        # Real semantic embeddings — not degraded.
+        degraded = False
+        implementation = "sentence-transformers"
+
         def __init__(self, model_name: str) -> None:
             self._model = SentenceTransformer(model_name)
 

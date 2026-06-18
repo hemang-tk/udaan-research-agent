@@ -181,6 +181,8 @@ class BriefSection(_Base):
 class BriefMetadata(_Base):
     total_claims: int = Field(alias="totalClaims", ge=0)
     sections_generated: int = Field(alias="sectionsGenerated", ge=0)
+    degraded: bool = False
+    degraded_stages: list[str] = Field(default_factory=list, alias="degradedStages")
 
 
 class ResearchBrief(_Base):

@@ -4,6 +4,7 @@ fetches bytes from the object vault) and returns the extracted-claim summary."""
 from __future__ import annotations
 
 import base64
+import logging
 
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,17 +12,20 @@ from udaan_shared import create_embedding_provider, create_llm_provider, load_co
 
 from .embeddings import register_sentence_transformers
 from .ingest import ingest_document
-from .parser import parse_pdf
+from .parser import parse_pdf, parser_quality
 from .store import ClaimStore, InMemoryClaimStore, QdrantClaimStore
 
 register_defaults()
 register_sentence_transformers()  # overrides "local" embedding if ML extra present
+
+_log = logging.getLogger("udaan.parsing")
 
 app = FastAPI(title="Udaan Parsing (Phase 5)")
 
 _llm = None
 _embed = None
 _store: ClaimStore | None = None
+_quality_logged = False
 
 
 def _deps():
@@ -37,6 +41,25 @@ def _deps():
     return _llm, _embed, _store
 
 
+def stage_quality() -> list[dict]:
+    """Report the active embedding + parser implementations (issue #17)."""
+    global _quality_logged
+    _, embed, _ = _deps()
+    embed_degraded = bool(getattr(embed, "degraded", False))
+    embed_impl = getattr(embed, "implementation", "unknown")
+    parser_impl, parser_degraded = parser_quality()
+    stages = [
+        {"stage": "embedding", "implementation": embed_impl, "degraded": embed_degraded},
+        {"stage": "parsing", "implementation": parser_impl, "degraded": parser_degraded},
+    ]
+    if not _quality_logged:
+        for s in stages:
+            if s["degraded"]:
+                _log.warning("Parsing stage %s is DEGRADED: %s", s["stage"], s["implementation"])
+        _quality_logged = True
+    return stages
+
+
 class IngestRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -46,8 +69,12 @@ class IngestRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    try:
+        stages = stage_quality()
+    except Exception:
+        stages = []
+    return {"status": "ok", "stages": stages}
 
 
 @app.post("/ingest")

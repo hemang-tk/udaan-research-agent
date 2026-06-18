@@ -58,7 +58,14 @@ export async function runGeneration(graph: SynthesisGraph, deps: GenerationDeps)
   const woven = weaveCitations(sections, claimMeta);
   return {
     projectId: graph.projectId,
-    metadata: { totalClaims: allowedAll.size, sectionsGenerated: woven.sections.length },
+    // degraded/degradedStages are finalised by the pipeline driver once it knows
+    // which stages used fallback implementations (issue #17).
+    metadata: {
+      totalClaims: allowedAll.size,
+      sectionsGenerated: woven.sections.length,
+      degraded: false,
+      degradedStages: [],
+    },
     sections: woven.sections,
     bibliography: woven.bibliography,
   };

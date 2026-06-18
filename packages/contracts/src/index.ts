@@ -152,9 +152,18 @@ export interface BriefSection {
   bodyText: string;
 }
 
+export interface BriefMetadata {
+  totalClaims: number;
+  sectionsGenerated: number;
+  /** True if any stage ran on a low-quality fallback implementation. */
+  degraded: boolean;
+  /** Stages that used a fallback (e.g. embedding, rerank, clustering, parsing). */
+  degradedStages: string[];
+}
+
 export interface ResearchBrief {
   projectId: string;
-  metadata: { totalClaims: number; sectionsGenerated: number };
+  metadata: BriefMetadata;
   sections: BriefSection[];
   bibliography: Record<string, BibliographyEntry>;
 }

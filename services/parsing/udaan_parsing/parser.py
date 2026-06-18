@@ -8,6 +8,17 @@ import io
 from .chunking import Chunk, chunk_pages
 
 
+def parser_quality() -> tuple[str, bool]:
+    """Report the active parser implementation and whether it is the fallback
+    (issue #17): Docling is layout-aware; pypdf is the degraded fallback."""
+    try:
+        import docling  # noqa: F401
+
+        return "docling", False
+    except Exception:
+        return "pypdf", True
+
+
 def _extract_pages_pypdf(data: bytes) -> list[str]:
     from pypdf import PdfReader
 
