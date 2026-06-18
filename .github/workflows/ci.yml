@@ -38,11 +38,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Run via turbo so the composite package references (@udaan/contracts,
+      # @udaan/shared) are built before dependents are typechecked — `pnpm -r`
+      # skips that and `tsc --noEmit` then fails with TS6305 on the built refs.
       - name: Typecheck
-        run: pnpm -r typecheck
+        run: pnpm turbo run typecheck
 
       - name: Test
-        run: pnpm -r test
+        run: pnpm turbo run test
 
   python:
     name: Python (pytest)
