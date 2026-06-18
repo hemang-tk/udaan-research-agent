@@ -6,7 +6,7 @@ Phase 2 is the boundary layer between the system's internal pipeline and externa
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — concurrent API fan-out, circuit breakers, dedup.
 - **External providers:** OpenAlex, Semantic Scholar, Crossref. Endpoints/keys via env config (no hardcoded host) for deploy portability.

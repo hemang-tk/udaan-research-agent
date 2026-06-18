@@ -6,7 +6,7 @@ Phase 7 is the final assembly line. It takes the logical structures generated in
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — regex citation weaving + deterministic sentence filtering.
 - **Generation LLM** (behind an LLM-provider interface; trust-critical): paid (recommended) → **Claude Opus 4.8**; free → Groq Llama 3.3 70B; local → Qwen2.5-7B (Q4). See §4.1 for the provider-dependent determinism settings.

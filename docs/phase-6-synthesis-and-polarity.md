@@ -6,7 +6,7 @@ Phase 6 extracts logical meaning from mathematical proximity. It fetches the dis
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** Python service — SciPy/NumPy + HDBSCAN/Agglomerative clustering (CPU-bound); no TS equivalent.
 - **Polarity-judge LLM** (behind an LLM-provider interface; trust-critical): local → Qwen2.5-7B (Q4) — adequate but weakest here; free → **Groq Llama 3.3 70B**; paid (recommended) → **Claude Opus 4.8** (use adaptive thinking; omit `temperature`/`top_p`).

@@ -5,7 +5,7 @@ traceable research brief. The core guarantee is **zero-hallucination
 traceability** — every claim in the output traces to a real passage in a real
 paper.
 
-Per-phase design lives in the `*.md` phase docs (Query Orchestration … Generation & Citation Weaving).
+Per-phase architectural design lives in [`docs/`](./docs) — one doc per phase, plus the system-flow diagram.
 
 ## Pipeline
 

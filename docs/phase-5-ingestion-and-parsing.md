@@ -6,7 +6,7 @@ Phase 5 transforms raw, unstructured physical assets (PDFs) into highly structur
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** Python service — **Docling** is Python-only and the linchpin of quote-anchored traceability; no TS equivalent.
 - **Embeddings** (behind an `EmbeddingProvider` interface): local → **`BAAI/bge-base-en-v1.5`** (768-dim); free API → Cohere `embed-v3`.

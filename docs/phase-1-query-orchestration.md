@@ -6,7 +6,7 @@ Phase 1 serves as the ingest gateway for natural language user intent, translati
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — orchestration spine.
 - **Cache:** Redis (query-hash cache) as a local docker-compose container; URL via env config (no hardcoded host) for deploy portability.

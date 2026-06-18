@@ -8,7 +8,7 @@ Crucially, this phase is designed to operate strictly within legal boundaries, r
 
 ---
 
-## Implementation Stack (finalized — see `STACK.md`)
+## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — async streaming downloads.
 - **Object storage:** **MinIO** (S3-compatible) locally via docker-compose; `storagePointer` stays an `s3://` URI, so a later move to AWS S3 / GCS is an endpoint + credential config change, not a code change.
