@@ -11,7 +11,7 @@ import { CrossrefAdapter } from "./adapters/crossref.js";
 import { OpenAlexAdapter } from "./adapters/openalex.js";
 import { SemanticScholarAdapter } from "./adapters/semantic-scholar.js";
 import { deduplicate } from "./dedupe.js";
-import { CircuitBreaker, dispatchAll } from "./dispatcher.js";
+import { CircuitBreaker, dispatchAll, getSharedBreaker } from "./dispatcher.js";
 import { dropInvalid } from "./normalize.js";
 import type { AdapterResult, OpenGraphProvider } from "./types.js";
 
@@ -38,9 +38,11 @@ export async function runGateway(
   deps: GatewayDeps = {},
 ): Promise<GatewayResult> {
   const adapters = deps.adapters ?? defaultAdapters();
+  // Default to the process-scoped breaker so repeated provider failures across
+  // requests actually trip it (and short-circuit) instead of resetting each run.
   const providerResults = await dispatchAll(adapters, manifest, {
     timeoutMs: deps.timeoutMs,
-    breaker: deps.breaker,
+    breaker: deps.breaker ?? getSharedBreaker(),
   });
 
   const all = providerResults.flatMap((r) => r.records);

@@ -1,9 +1,9 @@
-"""FastAPI surface for Phase 5. POST /ingest accepts a base64 PDF (the worker
-fetches bytes from the object vault) and returns the extracted-claim summary."""
+"""FastAPI surface for Phase 5. POST /ingest takes a vault storage pointer
+(s3://bucket/key); the parser streams the PDF directly from MinIO/S3 (no
+base64-over-HTTP) and returns the extracted-claim summary."""
 
 from __future__ import annotations
 
-import base64
 import logging
 
 from fastapi import FastAPI
@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from udaan_shared import create_embedding_provider, create_llm_provider, load_config, register_defaults
 
 from .embeddings import register_sentence_transformers
-from .ingest import ingest_document
+from .ingest import ingest_from_pointer
+from .objstore import InMemoryObjectStore, ObjectStore, S3ObjectStore
 from .parser import parse_pdf, parser_quality
 from .store import ClaimStore, InMemoryClaimStore, QdrantClaimStore
 
@@ -25,11 +26,12 @@ app = FastAPI(title="Udaan Parsing (Phase 5)")
 _llm = None
 _embed = None
 _store: ClaimStore | None = None
+_objstore: ObjectStore | None = None
 _quality_logged = False
 
 
 def _deps():
-    global _llm, _embed, _store
+    global _llm, _embed, _store, _objstore
     if _llm is None:
         cfg = load_config()
         _llm = create_llm_provider(cfg)
@@ -38,13 +40,17 @@ def _deps():
             _store = QdrantClaimStore(cfg.qdrant_url)
         except Exception:
             _store = InMemoryClaimStore()
-    return _llm, _embed, _store
+        try:
+            _objstore = S3ObjectStore.from_config(cfg.s3)
+        except Exception:
+            _objstore = InMemoryObjectStore()
+    return _llm, _embed, _store, _objstore
 
 
 def stage_quality() -> list[dict]:
     """Report the active embedding + parser implementations (issue #17)."""
     global _quality_logged
-    _, embed, _ = _deps()
+    _, embed, _, _ = _deps()
     embed_degraded = bool(getattr(embed, "degraded", False))
     embed_impl = getattr(embed, "implementation", "unknown")
     parser_impl, parser_degraded = parser_quality()
@@ -65,7 +71,7 @@ class IngestRequest(BaseModel):
 
     project_id: str = Field(alias="projectId")
     document_doi: str | None = Field(default=None, alias="documentDoi")
-    pdf_base64: str = Field(alias="pdfBase64")
+    storage_pointer: str = Field(alias="storagePointer")
 
 
 @app.get("/health")
@@ -79,10 +85,16 @@ def health() -> dict:
 
 @app.post("/ingest")
 def ingest(req: IngestRequest) -> dict:
-    llm, embed, store = _deps()
-    data = base64.b64decode(req.pdf_base64)
-    claims = ingest_document(
-        data, req.document_doi, req.project_id, parse=parse_pdf, llm=llm, embed=embed, store=store
+    llm, embed, store, objstore = _deps()
+    claims = ingest_from_pointer(
+        req.storage_pointer,
+        req.document_doi,
+        req.project_id,
+        object_store=objstore,
+        parse=parse_pdf,
+        llm=llm,
+        embed=embed,
+        store=store,
     )
     return {
         "projectId": req.project_id,

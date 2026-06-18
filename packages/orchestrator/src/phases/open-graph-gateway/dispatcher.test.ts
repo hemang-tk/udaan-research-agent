@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CompiledDiscoveryManifest } from "@udaan/contracts";
-import { CircuitBreaker, dispatchAll } from "./dispatcher.js";
+import { CircuitBreaker, dispatchAll, getSharedBreaker } from "./dispatcher.js";
 import type { OpenGraphProvider } from "./types.js";
 
 const manifest: CompiledDiscoveryManifest = {
@@ -37,6 +37,37 @@ describe("dispatchAll", () => {
     const results = await dispatchAll([fast("A"), failing("B")], manifest, { timeoutMs: 1000 });
     expect(results.find((r) => r.provider === "A")!.ok).toBe(true);
     expect(results.find((r) => r.provider === "B")!.ok).toBe(false);
+  });
+
+  it("trips a shared breaker across repeated dispatches and short-circuits", async () => {
+    const breaker = new CircuitBreaker(3, 30_000); // shared across the calls below
+    const failing: OpenGraphProvider = {
+      name: "REPEAT",
+      search: async () => {
+        throw new Error("provider 503");
+      },
+    };
+    // Three separate dispatches accumulate failures on the same breaker.
+    for (let i = 0; i < 3; i++) {
+      const [r] = await dispatchAll([failing], manifest, { breaker, timeoutMs: 1000 });
+      expect(r!.ok).toBe(false);
+    }
+    // The 4th dispatch is short-circuited without calling the provider.
+    let called = false;
+    const tracked: OpenGraphProvider = {
+      name: "REPEAT",
+      search: async () => {
+        called = true;
+        return [];
+      },
+    };
+    const [r] = await dispatchAll([tracked], manifest, { breaker, timeoutMs: 1000 });
+    expect(called).toBe(false);
+    expect(r!.error).toBe("CIRCUIT_OPEN");
+  });
+
+  it("getSharedBreaker returns a stable process-scoped instance", () => {
+    expect(getSharedBreaker()).toBe(getSharedBreaker());
   });
 
   it("skips a provider whose circuit breaker is open", async () => {
