@@ -5,13 +5,18 @@
  */
 
 import { registerLLMProvider, type LLMCompleteOptions, type LLMMessage, type LLMProvider } from "@udaan/shared";
+import { resilientFetch } from "../util/resilience.js";
 
 interface OllamaChatResponse {
   message?: { content?: string };
 }
 
 export class OllamaLLMProvider implements LLMProvider {
-  constructor(private readonly opts: { ollamaUrl: string; model: string }) {}
+  private readonly timeoutMs: number;
+
+  constructor(private readonly opts: { ollamaUrl: string; model: string; timeoutMs?: number }) {
+    this.timeoutMs = opts.timeoutMs ?? 120_000;
+  }
 
   async complete(messages: LLMMessage[], options?: LLMCompleteOptions): Promise<string> {
     const fullMessages: LLMMessage[] = options?.system
@@ -27,11 +32,17 @@ export class OllamaLLMProvider implements LLMProvider {
     };
     if (options?.jsonSchema) body.format = "json";
 
-    const res = await fetch(`${this.opts.ollamaUrl}/api/chat`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    // A hung model used to stall the whole pipeline (the call had no timeout).
+    // Bound each attempt and retry once on a transient failure.
+    const res = await resilientFetch(
+      `${this.opts.ollamaUrl}/api/chat`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { timeoutMs: this.timeoutMs, retries: 1 },
+    );
     if (!res.ok) {
       throw new Error(`Ollama request failed: ${res.status} ${res.statusText}`);
     }
@@ -41,8 +52,12 @@ export class OllamaLLMProvider implements LLMProvider {
 }
 
 export function registerOllama(): void {
-  registerLLMProvider("ollama", (config) => new OllamaLLMProvider({
-    ollamaUrl: config.ollamaUrl,
-    model: config.models.llm,
-  }));
+  registerLLMProvider("ollama", (config) => {
+    const envTimeout = Number(process.env.OLLAMA_TIMEOUT_MS);
+    return new OllamaLLMProvider({
+      ollamaUrl: config.ollamaUrl,
+      model: config.models.llm,
+      timeoutMs: Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : undefined,
+    });
+  });
 }

@@ -12,17 +12,36 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 
 import httpx
 
 from .config import Config
 from .providers import register_embedding_provider, register_llm_provider
 
+# Bound the chat call so a hung model can't stall the pipeline indefinitely, and
+# retry once on a transient transport error. Override via OLLAMA_TIMEOUT_S.
+_DEFAULT_OLLAMA_TIMEOUT_S = 120.0
+_OLLAMA_RETRIES = 1
+
+
+def _ollama_timeout() -> float:
+    raw = os.environ.get("OLLAMA_TIMEOUT_S")
+    if raw:
+        try:
+            value = float(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+    return _DEFAULT_OLLAMA_TIMEOUT_S
+
 
 class OllamaLLMProvider:
-    def __init__(self, ollama_url: str, model: str) -> None:
+    def __init__(self, ollama_url: str, model: str, timeout_s: float | None = None) -> None:
         self._url = ollama_url
         self._model = model
+        self._timeout_s = timeout_s if timeout_s is not None else _ollama_timeout()
 
     def complete(
         self,
@@ -36,9 +55,23 @@ class OllamaLLMProvider:
         body: dict = {"model": self._model, "messages": full, "stream": False, "options": {"temperature": 0}}
         if json_schema is not None:
             body["format"] = "json"
-        resp = httpx.post(f"{self._url}/api/chat", json=body, timeout=120.0)
-        resp.raise_for_status()
-        return resp.json().get("message", {}).get("content", "")
+
+        last_error: Exception | None = None
+        for attempt in range(_OLLAMA_RETRIES + 1):
+            try:
+                resp = httpx.post(f"{self._url}/api/chat", json=body, timeout=self._timeout_s)
+                resp.raise_for_status()
+                return resp.json().get("message", {}).get("content", "")
+            except (httpx.TransportError, httpx.HTTPStatusError) as err:
+                # Timeouts/connection resets and 5xx are transient; retry once.
+                status = getattr(getattr(err, "response", None), "status_code", None)
+                if isinstance(err, httpx.HTTPStatusError) and status is not None and status < 500:
+                    raise
+                last_error = err
+                if attempt == _OLLAMA_RETRIES:
+                    break
+        assert last_error is not None
+        raise last_error
 
 
 class HashingEmbeddingProvider:
