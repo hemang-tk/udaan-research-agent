@@ -9,14 +9,38 @@ rather than accumulating duplicates."""
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Protocol
 
 from udaan_contracts import ValidatedClaim
 
+logger = logging.getLogger(__name__)
+
 
 def _point_id(claim_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, claim_id))
+
+
+def _is_already_exists(exc: Exception) -> bool:
+    """True if ``exc`` is qdrant's "index already exists" rejection.
+
+    Covers both transports without hard-importing their exception types:
+    REST raises ``UnexpectedResponse`` (HTTP 409), gRPC raises ``RpcError``
+    with ``StatusCode.ALREADY_EXISTS``. As a final fallback we match the
+    server's message, which contains "already exists" in either transport.
+    """
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 409:
+        return True
+    grpc_code = getattr(exc, "code", None)
+    if callable(grpc_code):
+        try:
+            if getattr(grpc_code(), "name", None) == "ALREADY_EXISTS":
+                return True
+        except Exception:  # noqa: BLE001 - defensive: code() may raise
+            pass
+    return "already exists" in str(exc).lower()
 
 
 class ClaimStore(Protocol):
@@ -77,9 +101,26 @@ class QdrantClaimStore:
                     field_name=field,
                     field_schema=PayloadSchemaType.KEYWORD,
                 )
-            except Exception:
-                # Index already exists (or server rejects re-create) — non-fatal.
-                pass
+            except Exception as exc:  # noqa: BLE001 - narrowed below
+                # qdrant-client has no `if_not_exists`; re-creating an existing
+                # index is rejected (REST 409 / gRPC ALREADY_EXISTS). That case
+                # is the idempotent no-op we expect. Any other failure (auth,
+                # connection, bad schema) must not be hidden — log and re-raise
+                # so we don't run in a silently degraded state.
+                if _is_already_exists(exc):
+                    logger.debug(
+                        "payload index for '%s' already exists in collection '%s'",
+                        field,
+                        self.collection,
+                    )
+                    continue
+                logger.warning(
+                    "create_payload_index failed for field '%s' in collection '%s'",
+                    field,
+                    self.collection,
+                    exc_info=exc,
+                )
+                raise
 
     def _document_filter(self, project_id: str, document_doi: str | None):
         from qdrant_client.models import (

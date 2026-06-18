@@ -30,7 +30,18 @@ def deterministic_claim_id(
     """A stable ID derived from the claim's content. Identical content (same
     project, document, classification, verbatim quote, restatement) always maps
     to the same ID, so a re-run upserts the same points instead of duplicating."""
-    key = "\x1f".join([project_id, document_doi or "", classification, source_quote, claim_text])
+    key = json.dumps(
+        {
+            "project_id": project_id,
+            "document_doi": document_doi,  # preserves None vs "" so they don't collide
+            "classification": classification,
+            "source_quote": source_quote,
+            "claim_text": claim_text,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
     return f"cl_{uuid.uuid5(_CLAIM_NAMESPACE, key).hex}"
 
 EXTRACTION_SYSTEM = (

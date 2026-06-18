@@ -49,6 +49,53 @@ def test_claim_id_is_deterministic_for_same_content():
     assert a.startswith("cl_")
 
 
+def test_claim_id_distinguishes_none_and_empty_doi():
+    # A missing DOI (None) and an empty-string DOI are different documents and
+    # must not collide onto the same claim_id (would cause cross-doc overwrite).
+    a = deterministic_claim_id("p", None, "FINDING", "quote", "text")
+    b = deterministic_claim_id("p", "", "FINDING", "quote", "text")
+    assert a != b
+
+
+def test_failed_embedding_does_not_delete_existing_claims():
+    # Delete-before-insert must not run if embedding fails, otherwise a transient
+    # embed error would leave the document with zero claims.
+    store = InMemoryClaimStore()
+
+    ingest_document(
+        b"%PDF-a",
+        document_doi="10.1/x",
+        project_id="proj_1",
+        parse=_parse,
+        llm=StubLLM(),
+        embed=StubEmbed(),
+        store=store,
+    )
+    assert len(store.claims) == 1
+
+    class BoomEmbed:
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            raise RuntimeError("embedding backend down")
+
+    try:
+        ingest_document(
+            b"%PDF-a",
+            document_doi="10.1/x",
+            project_id="proj_1",
+            parse=_parse,
+            llm=StubLLM(),
+            embed=BoomEmbed(),
+            store=store,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected embedding failure to propagate")
+
+    # The previously stored claim must survive the failed re-ingest.
+    assert len(store.claims) == 1
+
+
 def test_extract_claims_are_stable_across_runs():
     chunk = Chunk(text=_PASSAGE, section="Results", page_number=6)
     first = extract_claims(chunk, "proj_1", "10.1/x", StubLLM())
