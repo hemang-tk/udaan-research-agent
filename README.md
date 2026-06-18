@@ -5,10 +5,7 @@ traceable research brief. The core guarantee is **zero-hallucination
 traceability** — every claim in the output traces to a real passage in a real
 paper.
 
-- **Vision & success criteria:** [`PROJECT.md`](./PROJECT.md)
-- **Tech stack & rationale:** [`STACK.md`](./STACK.md)
-- **Shared foundation (how the pieces fit):** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md)
-- **Per-phase design:** the `*.md` phase docs (Query Orchestration … Generation).
+Per-phase design lives in the `*.md` phase docs (Query Orchestration … Generation & Citation Weaving).
 
 ## Pipeline
 
