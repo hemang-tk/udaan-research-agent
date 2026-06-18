@@ -3,8 +3,17 @@
  * interfaces so the pipeline can be driven with fakes in tests.
  */
 
-import type { PrioritizedIngestionIndex, CandidatePaper, SynthesisGraph } from "@udaan/contracts";
-import { validatePrioritizedIngestionIndex, validateSynthesisGraph } from "@udaan/shared";
+import type {
+  PrioritizedIngestionIndex,
+  CandidatePaper,
+  IngestResult,
+  SynthesisGraph,
+} from "@udaan/contracts";
+import {
+  validateIngestResult,
+  validatePrioritizedIngestionIndex,
+  validateSynthesisGraph,
+} from "@udaan/shared";
 
 export interface RankingService {
   rerank(input: {
@@ -19,7 +28,7 @@ export interface ParsingService {
     projectId: string;
     documentDoi: string | null;
     pdfBase64: string;
-  }): Promise<{ claimsExtracted: number }>;
+  }): Promise<IngestResult>;
 }
 
 export interface SynthesisService {
@@ -37,17 +46,6 @@ async function postJson<T>(url: string, body: unknown, validate: (data: unknown)
   // here with a descriptive error rather than corrupting the pipeline downstream.
   return validate(await res.json());
 }
-
-const validateIngestResult = (data: unknown): { claimsExtracted: number } => {
-  if (
-    typeof data !== "object" ||
-    data === null ||
-    typeof (data as { claimsExtracted?: unknown }).claimsExtracted !== "number"
-  ) {
-    throw new Error("parsing /ingest response missing numeric claimsExtracted");
-  }
-  return { claimsExtracted: (data as { claimsExtracted: number }).claimsExtracted };
-};
 
 export class HttpRankingService implements RankingService {
   constructor(private readonly baseUrl: string) {}

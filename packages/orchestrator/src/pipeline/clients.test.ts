@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HttpRankingService, HttpSynthesisService } from "./clients.js";
+import { HttpParsingService, HttpRankingService, HttpSynthesisService } from "./clients.js";
 
 function mockFetchOnce(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   const res = {
@@ -58,6 +58,22 @@ describe("HTTP service clients — boundary validation", () => {
     const svc = new HttpRankingService("http://ranking");
     await expect(svc.rerank({ projectId: "p1", originalQuery: "q", candidatePapers: [] })).rejects.toThrow(
       /failed schema validation/,
+    );
+  });
+
+  it("accepts a valid parsing /ingest response", async () => {
+    mockFetchOnce({ projectId: "p1", claimsExtracted: 2, claimIds: ["cl_a", "cl_b"] });
+    const svc = new HttpParsingService("http://parsing");
+    const out = await svc.ingest({ projectId: "p1", documentDoi: null, pdfBase64: "" });
+    expect(out.claimsExtracted).toBe(2);
+    expect(out.claimIds).toEqual(["cl_a", "cl_b"]);
+  });
+
+  it("rejects a parsing /ingest response with a wrong-typed field", async () => {
+    mockFetchOnce({ projectId: "p1", claimsExtracted: "nope", claimIds: [] });
+    const svc = new HttpParsingService("http://parsing");
+    await expect(svc.ingest({ projectId: "p1", documentDoi: null, pdfBase64: "" })).rejects.toThrow(
+      /IngestResult failed schema validation/,
     );
   });
 

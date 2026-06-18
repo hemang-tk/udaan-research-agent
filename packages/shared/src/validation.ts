@@ -10,8 +10,14 @@
  */
 
 import Ajv2020, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
-import type { PrioritizedIngestionIndex, ResearchBrief, SynthesisGraph } from "@udaan/contracts";
+import type {
+  IngestResult,
+  PrioritizedIngestionIndex,
+  ResearchBrief,
+  SynthesisGraph,
+} from "@udaan/contracts";
 import {
+  ingestResultSchema,
   prioritizedIngestionIndexSchema,
   researchBriefSchema,
   synthesisGraphSchema,
@@ -55,6 +61,9 @@ export const validatePrioritizedIngestionIndex = compile<PrioritizedIngestionInd
   prioritizedIngestionIndexSchema,
   "PrioritizedIngestionIndex",
 );
+
+/** Validate a Phase 5 parsing-service `/ingest` response. Throws on mismatch. */
+export const validateIngestResult = compile<IngestResult>(ingestResultSchema, "IngestResult");
 
 /** Validate a Phase 6 synthesis-service response. Throws on mismatch. */
 export const validateSynthesisGraph = compile<SynthesisGraph>(synthesisGraphSchema, "SynthesisGraph");

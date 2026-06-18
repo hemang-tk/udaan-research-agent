@@ -28,3 +28,5 @@ export const researchBriefSchema = load("research-brief.schema.json");
 export const candidatePaperSchema = load("candidate-paper.schema.json");
 /** Phase 5 record — `ValidatedClaim`. */
 export const validatedClaimSchema = load("validated-claim.schema.json");
+/** Phase 5 `/ingest` response — `IngestResult`. */
+export const ingestResultSchema = load("ingest-result.schema.json");

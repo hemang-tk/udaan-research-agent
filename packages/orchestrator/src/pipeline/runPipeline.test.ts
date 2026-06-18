@@ -61,9 +61,9 @@ const ranking: RankingService = {
 
 let ingestCalls = 0;
 const parsing: ParsingService = {
-  ingest: async () => {
+  ingest: async (input) => {
     ingestCalls++;
-    return { claimsExtracted: 2 };
+    return { projectId: input.projectId, claimsExtracted: 2, claimIds: ["cl_a", "cl_b"] };
   },
 };
 

@@ -125,6 +125,13 @@ export interface ValidatedClaim {
   vectorEmbedding?: number[] | null;
 }
 
+/** Phase 5 `/ingest` response, consumed by the orchestrator pipeline. */
+export interface IngestResult {
+  projectId: string;
+  claimsExtracted: number;
+  claimIds: string[];
+}
+
 // --- Phase 6: SynthesisGraph ---
 export interface SynthesisClaimRef {
   claimId: string;

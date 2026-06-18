@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://udaan.dev/schema/ingest-result.json",
+  "title": "IngestResult",
+  "description": "Phase 5 (Ingestion & Parsing) /ingest response, consumed by the orchestrator pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projectId", "claimsExtracted", "claimIds"],
+  "properties": {
+    "projectId": { "type": "string" },
+    "claimsExtracted": { "type": "integer", "minimum": 0 },
+    "claimIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
