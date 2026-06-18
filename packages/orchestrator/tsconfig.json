@@ -2,7 +2,18 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@udaan/shared": ["../shared/src/index.ts"],
+      "@udaan/shared/*": ["../shared/src/*"],
+      "@udaan/contracts": ["../contracts/src/index.ts"],
+      "@udaan/contracts/*": ["../contracts/src/*"]
+    }
   },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../contracts" }
+  ],
   "include": ["src/**/*"]
 }
