@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type { CandidatePaper, CompiledDiscoveryManifest } from "@udaan/contracts";
 import { normalizeDoi, stripTags } from "../normalize.js";
+import { resilientFetch } from "../../../util/resilience.js";
 import type { OpenGraphProvider } from "../types.js";
 
 interface S2Paper {
@@ -25,7 +26,11 @@ export class SemanticScholarAdapter implements OpenGraphProvider {
     const query = payload?.query ?? manifest.searchContext.originalQuery;
     const fields = "title,abstract,year,citationCount,externalIds,authors,url";
     const url = `${this.baseUrl}/paper/search?query=${encodeURIComponent(query)}&fields=${fields}&limit=${this.limit}`;
-    const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+    const res = await resilientFetch(
+      url,
+      { headers: { accept: "application/json" } },
+      { signal, retries: 2, baseDelayMs: 200, maxDelayMs: 2000 },
+    );
     if (!res.ok) throw new Error(`SemanticScholar ${res.status}`);
     const data = (await res.json()) as { data?: S2Paper[] };
     return (data.data ?? []).map((p) => this.toCandidate(p));

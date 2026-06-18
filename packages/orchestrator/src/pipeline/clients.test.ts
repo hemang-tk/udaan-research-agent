@@ -64,7 +64,7 @@ describe("HTTP service clients — boundary validation", () => {
   it("accepts a valid parsing /ingest response", async () => {
     mockFetchOnce({ projectId: "p1", claimsExtracted: 2, claimIds: ["cl_a", "cl_b"] });
     const svc = new HttpParsingService("http://parsing");
-    const out = await svc.ingest({ projectId: "p1", documentDoi: null, pdfBase64: "" });
+    const out = await svc.ingest({ projectId: "p1", documentDoi: null, storagePointer: "s3://vault/x.pdf" });
     expect(out.claimsExtracted).toBe(2);
     expect(out.claimIds).toEqual(["cl_a", "cl_b"]);
   });
@@ -72,7 +72,7 @@ describe("HTTP service clients — boundary validation", () => {
   it("rejects a parsing /ingest response with a wrong-typed field", async () => {
     mockFetchOnce({ projectId: "p1", claimsExtracted: "nope", claimIds: [] });
     const svc = new HttpParsingService("http://parsing");
-    await expect(svc.ingest({ projectId: "p1", documentDoi: null, pdfBase64: "" })).rejects.toThrow(
+    await expect(svc.ingest({ projectId: "p1", documentDoi: null, storagePointer: "s3://vault/x.pdf" })).rejects.toThrow(
       /IngestResult failed schema validation/,
     );
   });

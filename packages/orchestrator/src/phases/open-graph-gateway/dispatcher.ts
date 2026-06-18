@@ -60,6 +60,16 @@ export class CircuitBreaker {
   }
 }
 
+// A process-scoped breaker shared across requests. The breaker only trips if
+// failures accumulate over time, so it must outlive a single dispatch — a
+// per-call instance (the previous behaviour) could never open.
+let sharedBreaker: CircuitBreaker | undefined;
+
+export function getSharedBreaker(): CircuitBreaker {
+  if (!sharedBreaker) sharedBreaker = new CircuitBreaker();
+  return sharedBreaker;
+}
+
 export interface DispatchOptions {
   timeoutMs?: number;
   breaker?: CircuitBreaker;
