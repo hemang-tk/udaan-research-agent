@@ -18,6 +18,28 @@ describe("orchestrator API", () => {
     await app.close();
   });
 
+  it("rejects a research request with a non-string query", async () => {
+    const app = buildServer();
+    const res = await app.inject({ method: "POST", url: "/research", payload: { query: 123 } });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects a research request with unknown fields", async () => {
+    const app = buildServer();
+    const res = await app.inject({ method: "POST", url: "/research", payload: { query: "hi", rogue: true } });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects an upload missing internalId", async () => {
+    const app = buildServer({ store: new InMemoryObjectStore() });
+    const pdfBase64 = Buffer.from("just text").toString("base64");
+    const res = await app.inject({ method: "POST", url: "/uploads", payload: { doi: null, pdfBase64 } });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("404s an unknown job", async () => {
     const app = buildServer();
     const res = await app.inject({ method: "GET", url: "/research/nope" });

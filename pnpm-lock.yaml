@@ -17,6 +17,9 @@ importers:
 
   packages/contracts:
     devDependencies:
+      '@types/node':
+        specifier: ^22.7.0
+        version: 22.19.21
       json-schema-to-typescript:
         specifier: ^15.0.3
         version: 15.0.4
@@ -63,6 +66,9 @@ importers:
       '@udaan/contracts':
         specifier: workspace:*
         version: link:../contracts
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
     devDependencies:
       '@types/node':
         specifier: ^22.7.0

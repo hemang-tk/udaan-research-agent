@@ -29,7 +29,12 @@ export interface ServerOptions {
 }
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false });
+  // Strict boundary validation: don't silently coerce types or strip unknown
+  // fields — a malformed request body is rejected with a 400, not patched up.
+  const app = Fastify({
+    logger: false,
+    ajv: { customOptions: { coerceTypes: false, removeAdditional: false } },
+  });
   const jobs = new Map<string, Job>();
 
   let store = options.store ?? null;
@@ -68,14 +73,29 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  app.post<{ Body: { query: string; projectId?: string; userId?: string } }>("/research", async (req, reply) => {
-    const { query, projectId = `proj_${randomUUID().slice(0, 8)}`, userId = "anonymous" } = req.body ?? {};
-    if (!query || typeof query !== "string") {
-      return reply.code(400).send({ error: "query is required" });
-    }
-    const jobId = startJob(query, projectId, userId);
-    return reply.code(202).send({ jobId, projectId });
-  });
+  // Runtime request-body validation at the API boundary (issue #20). Fastify
+  // rejects a body that violates the schema with a descriptive 400 before the
+  // handler runs, so a malformed client request never enters the pipeline.
+  const researchBodySchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["query"],
+    properties: {
+      query: { type: "string", minLength: 1 },
+      projectId: { type: "string", minLength: 1 },
+      userId: { type: "string", minLength: 1 },
+    },
+  };
+
+  app.post<{ Body: { query: string; projectId?: string; userId?: string } }>(
+    "/research",
+    { schema: { body: researchBodySchema } },
+    async (req, reply) => {
+      const { query, projectId = `proj_${randomUUID().slice(0, 8)}`, userId = "anonymous" } = req.body ?? {};
+      const jobId = startJob(query, projectId, userId);
+      return reply.code(202).send({ jobId, projectId });
+    },
+  );
 
   app.get<{ Params: { id: string } }>("/research/:id", async (req, reply) => {
     const job = jobs.get(req.params.id);
@@ -122,13 +142,22 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   // Manual upload for a paywalled paper: store the PDF in the vault keyed by
   // (doi, internalId) so a re-run resolves it from cache (Track A).
+  const uploadBodySchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["internalId", "pdfBase64"],
+    properties: {
+      doi: { type: ["string", "null"] },
+      internalId: { type: "string", minLength: 1 },
+      pdfBase64: { type: "string", minLength: 1 },
+    },
+  };
+
   app.post<{ Body: { doi: string | null; internalId: string; pdfBase64: string } }>(
     "/uploads",
+    { schema: { body: uploadBodySchema } },
     async (req, reply) => {
       const { doi = null, internalId, pdfBase64 } = req.body ?? {};
-      if (!internalId || !pdfBase64) {
-        return reply.code(400).send({ error: "internalId and pdfBase64 are required" });
-      }
       const bytes = new Uint8Array(Buffer.from(pdfBase64, "base64"));
       if (bytes.length < 5 || !(bytes[0] === 0x25 && bytes[1] === 0x50)) {
         return reply.code(415).send({ error: "not a PDF" });
