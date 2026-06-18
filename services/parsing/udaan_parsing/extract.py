@@ -14,6 +14,25 @@ from .chunking import Chunk
 
 VALID_CLASSES = {"FINDING", "HYPOTHESIS", "LIMITATION", "METHODOLOGY"}
 
+# Namespace for deterministic claim IDs (Phase 5 idempotency). Re-ingesting the
+# same document must produce the same claim IDs so re-runs overwrite rather than
+# accumulate duplicates in the vector space.
+_CLAIM_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "udaan/claim")
+
+
+def deterministic_claim_id(
+    project_id: str,
+    document_doi: str | None,
+    classification: str,
+    source_quote: str,
+    claim_text: str,
+) -> str:
+    """A stable ID derived from the claim's content. Identical content (same
+    project, document, classification, verbatim quote, restatement) always maps
+    to the same ID, so a re-run upserts the same points instead of duplicating."""
+    key = "\x1f".join([project_id, document_doi or "", classification, source_quote, claim_text])
+    return f"cl_{uuid.uuid5(_CLAIM_NAMESPACE, key).hex}"
+
 EXTRACTION_SYSTEM = (
     "You are a strict claim extractor for scientific text. From the passage, "
     "extract discrete factual propositions. For each, return: claimText (a concise "
@@ -68,7 +87,7 @@ def extract_claims(chunk: Chunk, project_id: str, document_doi: str | None, llm)
 
         claims.append(
             ValidatedClaim(
-                claim_id=f"cl_{uuid.uuid4().hex}",
+                claim_id=deterministic_claim_id(project_id, document_doi, classification, quote, text),
                 project_id=project_id,
                 document_doi=document_doi,
                 claim_classification=classification,

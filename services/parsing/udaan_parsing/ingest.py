@@ -28,6 +28,12 @@ def ingest_document(
     for chunk in chunks:
         claims.extend(extract_claims(chunk, project_id, document_doi, llm))
 
+    # Idempotency (Phase 5): drop any existing claims for this document before
+    # re-inserting, so retries / crash recovery / re-uploads can't accumulate
+    # duplicate or orphaned claims in the vector space. Combined with the
+    # deterministic claim IDs, a re-run converges on exactly the current set.
+    store.delete_document_claims(project_id, document_doi)
+
     if claims:
         vectors = embed.embed([c.claim_text for c in claims])
         for claim, vector in zip(claims, vectors):
