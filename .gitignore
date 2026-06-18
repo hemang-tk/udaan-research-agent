@@ -36,3 +36,6 @@ Thumbs.db
 # Logs
 *.log
 package-lock.json
+
+# Local agent worktrees / scratch
+.claude/

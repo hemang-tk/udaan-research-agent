@@ -10,7 +10,7 @@ import type { LLMProvider } from "@udaan/shared";
 import { orchestrateQuery, type QueryCache, type ResearchQueryRequest } from "../phases/query-orchestration/index.js";
 import { runGateway } from "../phases/open-graph-gateway/index.js";
 import type { OpenGraphProvider } from "../phases/open-graph-gateway/index.js";
-import { runFullTextResolution, storageKey, type ObjectStore } from "../phases/full-text-resolution/index.js";
+import { runFullTextResolution, type ObjectStore } from "../phases/full-text-resolution/index.js";
 import type { FetchLike } from "../phases/full-text-resolution/index.js";
 import { runGeneration } from "../phases/generation-citation-weaving/index.js";
 import type { ParsingService, RankingService, SynthesisService } from "./clients.js";
@@ -81,15 +81,19 @@ export async function runPipeline(
   const paywalled = resolution.manifest.filter((e) => e.status === "PAYWALLED");
   if (paywalled.length > 0) deps.onPaywalled?.(paywalled);
 
-  // Phase 5 — Ingestion & Parsing (service); feed each resolved PDF's bytes.
+  // Phase 5 — Ingestion & Parsing (service). Hand the parser a vault pointer; it
+  // streams the PDF directly from MinIO/S3, so large PDFs are never buffered or
+  // base64-inflated through the orchestrator (Phase 4's streaming intent).
   emit(5, "Ingestion & Parsing", "start");
   let claimsExtracted = 0;
   for (const entry of resolution.manifest) {
     if (entry.status !== "RESOLVED_CACHE" && entry.status !== "RESOLVED_DOWNLOAD") continue;
-    const bytes = await deps.store.get(storageKey(entry.doi, entry.internalId));
-    if (!bytes) continue;
-    const pdfBase64 = Buffer.from(bytes).toString("base64");
-    const res = await deps.parsing.ingest({ projectId: request.projectId, documentDoi: entry.doi, pdfBase64 });
+    if (!entry.storagePointer) continue;
+    const res = await deps.parsing.ingest({
+      projectId: request.projectId,
+      documentDoi: entry.doi,
+      storagePointer: entry.storagePointer,
+    });
     claimsExtracted += res.claimsExtracted;
   }
   emit(5, "Ingestion & Parsing", "done", `${claimsExtracted} claims`);

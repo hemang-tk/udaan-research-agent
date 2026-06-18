@@ -1,0 +1,71 @@
+name: CI
+
+# Merge gate: typecheck + tests for the TypeScript packages and pytest for the
+# three Python services. Runs on every PR to main and on pushes to main.
+# (Lint/format enforcement is wired separately in #27; this workflow owns the
+# typecheck + test gates.)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ts:
+    name: TypeScript (typecheck + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test
+
+  python:
+    name: Python (pytest)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [parsing, ranking, synthesis]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Cache the uv download/build cache across runs (issue #18 asks to
+          # cache both the pnpm store and the uv cache).
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Test ${{ matrix.service }}
+        working-directory: services/${{ matrix.service }}
+        run: uv run --quiet pytest -q

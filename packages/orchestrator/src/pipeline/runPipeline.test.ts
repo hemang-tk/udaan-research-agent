@@ -60,9 +60,11 @@ const ranking: RankingService = {
 };
 
 let ingestCalls = 0;
+let lastIngestInput: { storagePointer: string } | undefined;
 const parsing: ParsingService = {
-  ingest: async () => {
+  ingest: async (input) => {
     ingestCalls++;
+    lastIngestInput = input;
     return { claimsExtracted: 2 };
   },
 };
@@ -122,6 +124,8 @@ describe("runPipeline (end-to-end)", () => {
 
     // One paper resolved (arXiv) + handed to the parser; one was paywalled.
     expect(ingestCalls).toBe(1);
+    // The parser receives a vault pointer, not buffered PDF bytes (issue #24).
+    expect(lastIngestInput?.storagePointer).toMatch(/^s3:\/\/.+\.pdf$/);
     expect(paywalled.map((e) => e.internalId)).toEqual(["p2"]);
     // Brief is produced with woven citations and no raw tags.
     expect(result.brief.sections.length).toBeGreaterThan(0);

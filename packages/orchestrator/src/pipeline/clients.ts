@@ -17,7 +17,8 @@ export interface ParsingService {
   ingest(input: {
     projectId: string;
     documentDoi: string | null;
-    pdfBase64: string;
+    /** Vault pointer (s3://bucket/key); the parser reads the PDF directly. */
+    storagePointer: string;
   }): Promise<{ claimsExtracted: number }>;
 }
 
@@ -44,7 +45,7 @@ export class HttpRankingService implements RankingService {
 
 export class HttpParsingService implements ParsingService {
   constructor(private readonly baseUrl: string) {}
-  ingest(input: { projectId: string; documentDoi: string | null; pdfBase64: string }) {
+  ingest(input: { projectId: string; documentDoi: string | null; storagePointer: string }) {
     return postJson<{ claimsExtracted: number }>(`${this.baseUrl}/ingest`, input);
   }
 }
