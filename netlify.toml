@@ -1,0 +1,22 @@
+# Netlify configuration for the Udaan web frontend (packages/web — Vite + React).
+# This is a pnpm + Turborepo monorepo, so the build runs from the repo root:
+# Netlify detects pnpm-lock.yaml + the root "packageManager" field and runs
+# `pnpm install` for the whole workspace before the build command below.
+
+[build]
+  # Build only the web app (and any workspace deps it needs) via Turborepo.
+  command = "pnpm exec turbo run build --filter=@udaan/web"
+  # Vite's default output directory for packages/web.
+  publish = "packages/web/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # pnpm version comes from the root package.json "packageManager" (pnpm@9.12.0)
+  # via Corepack. Override with PNPM_VERSION only if you need a different one.
+
+# SPA fallback: serve index.html for any client-side route.
+# (API calls go cross-origin to VITE_API_BASE, so they are unaffected by this.)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
