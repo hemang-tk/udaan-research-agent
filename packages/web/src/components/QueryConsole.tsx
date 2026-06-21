@@ -36,6 +36,10 @@ export function QueryConsole({ value, onChange, onSubmit, onSample, busy }: Quer
 
   useLayoutEffect(() => {
     window.addEventListener("resize", fit);
+    // The custom serif loads async; the placeholder reflows (often gaining a line)
+    // when it swaps in, so re-fit once fonts are ready — otherwise the last line of
+    // the example question is clipped on first paint.
+    document.fonts?.ready.then(() => fit()).catch(() => {});
     return () => window.removeEventListener("resize", fit);
   }, [fit]);
 
