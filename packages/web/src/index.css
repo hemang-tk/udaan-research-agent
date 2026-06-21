@@ -19,7 +19,8 @@
   --font-serif: "Source Serif 4", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  --maxw: 980px;
+  --maxw: 1240px;
+  --rail-w: 320px;
   --radius: 10px;
 }
 
@@ -101,12 +102,50 @@ a {
   color: var(--accent);
 }
 
-/* ---------- Main ---------- */
-.main {
+/* ---------- Workspace (rail + canvas) ---------- */
+.workspace {
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  gap: 36px;
+  align-items: start;
+  padding-top: 30px;
+}
+
+/* The left rail is the control + provenance spine: it stays in view while the
+   reading canvas scrolls, so how a brief was built is always one glance away. */
+.rail {
+  position: sticky;
+  top: 22px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding-top: 32px;
+  gap: 18px;
+}
+
+.canvas {
+  min-width: 0; /* let long words/tables wrap instead of stretching the grid */
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* In the rail the ledger reads as a vertical spine; the dot carries state, so
+   the redundant status word is dropped to keep the column quiet. */
+.rail .ledger__row {
+  grid-template-columns: 28px 16px 1fr;
+}
+
+.rail .ledger__status {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .rail {
+    position: static;
+  }
 }
 
 /* ---------- Console ---------- */
@@ -507,6 +546,7 @@ a {
   line-height: 1.62;
   color: var(--ink);
   margin: 0;
+  max-width: 68ch; /* keep line length readable on the wider canvas */
 }
 
 /* ---------- Bibliography ---------- */

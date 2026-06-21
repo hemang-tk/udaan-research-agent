@@ -105,60 +105,64 @@ export function App() {
         <p className="masthead__claim">Zero-hallucination traceability</p>
       </header>
 
-      <main className="main">
-        <QueryConsole value={query} onChange={setQuery} onSubmit={run} onSample={loadSample} busy={busy} />
+      <div className="workspace">
+        <aside className="rail">
+          <QueryConsole value={query} onChange={setQuery} onSubmit={run} onSample={loadSample} busy={busy} />
 
-        {mode === "idle" && (
-          <section className="hero">
-            <h1 className="hero__headline">
-              Every claim in your brief traces to a real passage.
-            </h1>
-            <p className="hero__sub">
-              Ask a research question. Udaan searches the literature, reads the papers, and synthesizes a
-              brief — and every sentence it returns is anchored to a source you can open and verify.
-            </p>
+          {(mode === "running" || mode === "done") && (
+            <PipelineLedger statuses={statuses} details={details} />
+          )}
+        </aside>
 
-            <figure className="anatomy" aria-label="Anatomy of a traced claim">
-              <figcaption className="anatomy__cap">Anatomy of a traced claim</figcaption>
-              <p className="anatomy__claim">
-                Micro-caching reduced p99 tail latency by roughly 40% under standard load
-                <a className="cite cite--static" href="#ref-1">1</a>
+        <main className="canvas">
+          {isSample && (
+            <p className="banner banner--sample">Sample brief — illustrative, not a live run.</p>
+          )}
+
+          {mode === "idle" && (
+            <section className="hero">
+              <h1 className="hero__headline">
+                Every claim in your brief traces to a real passage.
+              </h1>
+              <p className="hero__sub">
+                Ask a research question. Udaan searches the literature, reads the papers, and synthesizes a
+                brief — and every sentence it returns is anchored to a source you can open and verify.
               </p>
-              <div className="anatomy__thread" aria-hidden="true" />
-              <div className="anatomy__source">
-                <span className="anatomy__srcLabel">source 1</span>
-                <span className="bib__claim">cl_9f2a1b</span>
-                <blockquote className="anatomy__quote">
-                  “…ephemeral micro-caching resulted in a 40.2% reduction in p99 tail latency”
-                </blockquote>
-              </div>
-            </figure>
-          </section>
-        )}
 
-        {(mode === "running" || mode === "done") && (
-          <PipelineLedger statuses={statuses} details={details} />
-        )}
+              <figure className="anatomy" aria-label="Anatomy of a traced claim">
+                <figcaption className="anatomy__cap">Anatomy of a traced claim</figcaption>
+                <p className="anatomy__claim">
+                  Micro-caching reduced p99 tail latency by roughly 40% under standard load
+                  <a className="cite cite--static" href="#ref-1">1</a>
+                </p>
+                <div className="anatomy__thread" aria-hidden="true" />
+                <div className="anatomy__source">
+                  <span className="anatomy__srcLabel">source 1</span>
+                  <span className="bib__claim">cl_9f2a1b</span>
+                  <blockquote className="anatomy__quote">
+                    “…ephemeral micro-caching resulted in a 40.2% reduction in p99 tail latency”
+                  </blockquote>
+                </div>
+              </figure>
+            </section>
+          )}
 
-        {isSample && (
-          <p className="banner banner--sample">Sample brief — illustrative, not a live run.</p>
-        )}
+          {mode === "rejected" && <p className="banner banner--warn">{message}</p>}
 
-        {mode === "rejected" && <p className="banner banner--warn">{message}</p>}
+          {mode === "error" && (
+            <div className="banner banner--error">
+              <span>{message}</span>
+              <button type="button" className="btn btn--ghost" onClick={loadSample}>
+                View a sample brief
+              </button>
+            </div>
+          )}
 
-        {mode === "error" && (
-          <div className="banner banner--error">
-            <span>{message}</span>
-            <button type="button" className="btn btn--ghost" onClick={loadSample}>
-              View a sample brief
-            </button>
-          </div>
-        )}
+          {mode === "done" && paywalled.length > 0 && <PaywallUploads entries={paywalled} />}
 
-        {mode === "done" && paywalled.length > 0 && <PaywallUploads entries={paywalled} />}
-
-        {mode === "done" && brief && <Brief brief={brief} />}
-      </main>
+          {mode === "done" && brief && <Brief brief={brief} />}
+        </main>
+      </div>
 
       <footer className="foot">
         <span>Udaan Research Agent</span>
