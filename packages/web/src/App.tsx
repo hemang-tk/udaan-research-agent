@@ -10,16 +10,27 @@ import type { PaywalledEntry, PhaseStatus, ResearchBrief } from "./types.js";
 type Mode = "idle" | "running" | "done" | "rejected" | "error";
 
 const emptyStatuses = (): Record<number, PhaseStatus> => ({});
+const allPhasesDone = (): Record<number, PhaseStatus> => ({
+  1: "done",
+  2: "done",
+  3: "done",
+  4: "done",
+  5: "done",
+  6: "done",
+  7: "done",
+});
 
 export function App() {
+  // First load shows a ready-made sample brief so the page demonstrates the product
+  // immediately; it's replaced the moment the user runs their own query (see reset()).
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<Mode>("idle");
-  const [statuses, setStatuses] = useState<Record<number, PhaseStatus>>(emptyStatuses);
+  const [mode, setMode] = useState<Mode>("done");
+  const [statuses, setStatuses] = useState<Record<number, PhaseStatus>>(allPhasesDone);
   const [details, setDetails] = useState<Record<number, string | undefined>>({});
-  const [brief, setBrief] = useState<ResearchBrief | null>(null);
+  const [brief, setBrief] = useState<ResearchBrief | null>(SAMPLE_BRIEF);
   const [paywalled, setPaywalled] = useState<PaywalledEntry[]>([]);
   const [message, setMessage] = useState("");
-  const [isSample, setIsSample] = useState(false);
+  const [isSample, setIsSample] = useState(true);
   const unsub = useRef<(() => void) | null>(null);
 
   const reset = useCallback(() => {
