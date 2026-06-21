@@ -18,9 +18,16 @@ export function QueryConsole({ value, onChange, onSubmit, onSample, busy }: Quer
     const el = inputRef.current;
     if (!el) return;
     const max = Math.min(360, Math.max(120, Math.round(window.innerHeight * 0.45)));
+    // Placeholders don't contribute to scrollHeight, so when the field is empty
+    // measure against the placeholder — the default field then fully shows the
+    // example question instead of clipping it.
+    const empty = el.value === "";
+    if (empty) el.value = el.placeholder;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
-    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+    const needed = el.scrollHeight;
+    if (empty) el.value = "";
+    el.style.height = `${Math.min(needed, max)}px`;
+    el.style.overflowY = needed > max ? "auto" : "hidden";
   }, []);
 
   useLayoutEffect(() => {
