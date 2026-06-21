@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Brief } from "./components/Brief.js";
+import { HistoryPanel } from "./components/HistoryPanel.js";
 import { PaywallUploads } from "./components/PaywallUploads.js";
 import { PipelineLedger } from "./components/PipelineLedger.js";
 import { QueryConsole } from "./components/QueryConsole.js";
-import { getStatus, startResearch, streamProgress } from "./api.js";
+import { getHistory, getResearch, getStatus, startResearch, streamProgress } from "./api.js";
 import { SAMPLE_BRIEF, SAMPLE_QUERY } from "./sample.js";
-import type { PaywalledEntry, PhaseStatus, ResearchBrief } from "./types.js";
+import type { PaywalledEntry, PhaseStatus, ResearchBrief, ResearchSummary } from "./types.js";
 
 type Mode = "idle" | "running" | "done" | "rejected" | "error";
 
@@ -31,7 +32,17 @@ export function App() {
   const [paywalled, setPaywalled] = useState<PaywalledEntry[]>([]);
   const [message, setMessage] = useState("");
   const [isSample, setIsSample] = useState(true);
+  const [history, setHistory] = useState<ResearchSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("sample");
   const unsub = useRef<(() => void) | null>(null);
+
+  const refreshHistory = useCallback(() => {
+    getHistory().then(setHistory).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory]);
 
   const reset = useCallback(() => {
     unsub.current?.();
@@ -46,6 +57,7 @@ export function App() {
   const run = useCallback(async () => {
     if (query.trim().length < 8) return;
     reset();
+    setSelectedId("");
     setMode("running");
     try {
       const { jobId } = await startResearch(query.trim());
@@ -58,6 +70,8 @@ export function App() {
           if ("status" in result && result.status === "ok") {
             setBrief(result.brief);
             setMode("done");
+            setSelectedId(jobId);
+            refreshHistory(); // the just-finished run is now persisted in History
             getStatus(jobId)
               .then((s) => setPaywalled(s.paywalled ?? []))
               .catch(() => undefined);
@@ -82,16 +96,34 @@ export function App() {
       );
       setMode("error");
     }
-  }, [query, reset]);
+  }, [query, reset, refreshHistory]);
 
   const loadSample = useCallback(() => {
     reset();
     setQuery(SAMPLE_QUERY);
     setBrief(SAMPLE_BRIEF);
-    setStatuses({ 1: "done", 2: "done", 3: "done", 4: "done", 5: "done", 6: "done", 7: "done" });
+    setStatuses(allPhasesDone());
     setIsSample(true);
+    setSelectedId("sample");
     setMode("done");
   }, [reset]);
+
+  const loadResearch = useCallback(
+    async (id: string) => {
+      reset();
+      setSelectedId(id);
+      const loaded = await getResearch(id);
+      if (loaded) {
+        setBrief(loaded);
+        setStatuses(allPhasesDone());
+        setMode("done");
+      } else {
+        setMessage("Couldn't load that research from history.");
+        setMode("error");
+      }
+    },
+    [reset],
+  );
 
   const busy = mode === "running";
 
@@ -108,6 +140,14 @@ export function App() {
       <div className="workspace">
         <aside className="rail">
           <QueryConsole value={query} onChange={setQuery} onSubmit={run} onSample={loadSample} busy={busy} />
+
+          <HistoryPanel
+            items={history}
+            selectedId={selectedId}
+            busy={busy}
+            onSelectSample={loadSample}
+            onSelect={loadResearch}
+          />
 
           {(mode === "running" || mode === "done") && (
             <PipelineLedger statuses={statuses} details={details} />

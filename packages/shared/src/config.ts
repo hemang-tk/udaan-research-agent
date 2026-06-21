@@ -18,6 +18,9 @@ export interface S3Config {
 export interface Config {
   qdrantUrl: string;
   redisUrl: string;
+  /** Postgres connection string for research-session persistence (History).
+   *  Optional: when unset, persistence is disabled and runs stay ephemeral. */
+  databaseUrl?: string;
   s3: S3Config;
   providers: {
     llm: LLMProviderName;
@@ -57,6 +60,7 @@ export function loadConfig(): Config {
   return {
     qdrantUrl: required("QDRANT_URL"),
     redisUrl: required("REDIS_URL"),
+    databaseUrl: optional("DATABASE_URL"),
     s3: {
       endpoint: required("S3_ENDPOINT"),
       bucket: required("S3_BUCKET"),
