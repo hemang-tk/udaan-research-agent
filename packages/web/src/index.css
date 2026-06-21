@@ -169,7 +169,8 @@ a {
 
 .console__input {
   width: 100%;
-  resize: vertical;
+  resize: none; /* height is managed automatically as you type */
+  min-height: 96px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   padding: 14px 16px;
