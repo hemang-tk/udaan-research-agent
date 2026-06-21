@@ -24,9 +24,10 @@ describe("regexTokenize", () => {
 
 describe("extractIntent", () => {
   it("uses valid LLM JSON (not degraded)", async () => {
-    const r = await extractIntent("micro-caching latency", stubLLM(
-      JSON.stringify({ coreConcepts: ["micro-caching", "tail latency"], temporalBounds: null }),
-    ));
+    const r = await extractIntent(
+      "micro-caching latency",
+      stubLLM(JSON.stringify({ coreConcepts: ["micro-caching", "tail latency"], temporalBounds: null })),
+    );
     expect(r.degraded).toBe(false);
     expect(r.coreConcepts).toEqual(["micro-caching", "tail latency"]);
   });

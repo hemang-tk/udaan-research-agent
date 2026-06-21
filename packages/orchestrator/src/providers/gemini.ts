@@ -4,7 +4,12 @@
  * Temperature 0 for determinism.
  */
 
-import { registerLLMProvider, type LLMCompleteOptions, type LLMMessage, type LLMProvider } from "@udaan/shared";
+import {
+  registerLLMProvider,
+  type LLMCompleteOptions,
+  type LLMMessage,
+  type LLMProvider,
+} from "@udaan/shared";
 
 interface GeminiContent {
   role: "user" | "model";
@@ -26,9 +31,7 @@ export class GeminiLLMProvider implements LLMProvider {
     }
 
     // Gemini separates system instructions from the conversation turns.
-    const systemInstruction = options?.system
-      ? { parts: [{ text: options.system }] }
-      : undefined;
+    const systemInstruction = options?.system ? { parts: [{ text: options.system }] } : undefined;
 
     // Gemini uses "user"/"model" roles (not "assistant").
     const contents: GeminiContent[] = messages.map((m) => ({
@@ -53,8 +56,7 @@ export class GeminiLLMProvider implements LLMProvider {
       ...(systemInstruction ? { systemInstruction } : {}),
     };
 
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.opts.model}:generateContent?key=${this.opts.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.opts.model}:generateContent?key=${this.opts.apiKey}`;
 
     const res = await fetch(url, {
       method: "POST",

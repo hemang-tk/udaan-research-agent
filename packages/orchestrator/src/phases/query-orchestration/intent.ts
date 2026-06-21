@@ -33,9 +33,34 @@ const SYSTEM_PROMPT =
   '{"coreConcepts": string[], "temporalBounds": {"startYear"?: number, "endYear"?: number} | null}.';
 
 const STOPWORDS = new Set([
-  "the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "how", "does",
-  "do", "is", "are", "what", "which", "with", "about", "into", "across", "since",
-  "after", "before", "between", "impact", "affect", "effect",
+  "the",
+  "a",
+  "an",
+  "of",
+  "in",
+  "on",
+  "for",
+  "to",
+  "and",
+  "or",
+  "how",
+  "does",
+  "do",
+  "is",
+  "are",
+  "what",
+  "which",
+  "with",
+  "about",
+  "into",
+  "across",
+  "since",
+  "after",
+  "before",
+  "between",
+  "impact",
+  "affect",
+  "effect",
 ]);
 
 const CURRENT_YEAR = 2026;

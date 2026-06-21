@@ -12,4 +12,10 @@ export { dispatchAll, withTimeout, CircuitBreaker, DEFAULT_TIMEOUT_MS } from "./
 export { OpenAlexAdapter } from "./adapters/openalex.js";
 export { SemanticScholarAdapter } from "./adapters/semantic-scholar.js";
 export { CrossrefAdapter } from "./adapters/crossref.js";
-export { runGateway, defaultAdapters, MAX_CANDIDATES, type GatewayDeps, type GatewayResult } from "./gateway.js";
+export {
+  runGateway,
+  defaultAdapters,
+  MAX_CANDIDATES,
+  type GatewayDeps,
+  type GatewayResult,
+} from "./gateway.js";

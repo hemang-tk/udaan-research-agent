@@ -11,12 +11,18 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { registerLLMProvider, type LLMCompleteOptions, type LLMMessage, type LLMProvider } from "@udaan/shared";
+import {
+  registerLLMProvider,
+  type LLMCompleteOptions,
+  type LLMMessage,
+  type LLMProvider,
+} from "@udaan/shared";
 
 export class AnthropicLLMProvider implements LLMProvider {
   private readonly client: Anthropic;
 
-  constructor(private readonly opts: { apiKey: string; model: string },
+  constructor(
+    private readonly opts: { apiKey: string; model: string },
     client?: Anthropic,
   ) {
     this.client =
@@ -67,7 +73,7 @@ export class AnthropicLLMProvider implements LLMProvider {
     // Otherwise extract all text blocks and join.
     return response.content
       .filter((b: { type: string }) => b.type === "text")
-      .map((b: { type: string; text?: string }) => (b.type === "text" ? b.text ?? "" : ""))
+      .map((b: { type: string; text?: string }) => (b.type === "text" ? (b.text ?? "") : ""))
       .join("");
   }
 }

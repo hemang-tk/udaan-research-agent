@@ -19,7 +19,10 @@ interface OpenAlexWork {
 export class OpenAlexAdapter implements OpenGraphProvider {
   readonly name = "OpenAlex";
 
-  constructor(private readonly baseUrl = "https://api.openalex.org", private readonly perPage = 200) {}
+  constructor(
+    private readonly baseUrl = "https://api.openalex.org",
+    private readonly perPage = 200,
+  ) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {
     const filter = manifest.compilations.openAlexFilter;
@@ -41,9 +44,7 @@ export class OpenAlexAdapter implements OpenGraphProvider {
       doi: normalizeDoi(w.doi ?? null),
       title: stripTags(w.display_name ?? ""),
       abstract: reconstructInvertedAbstract(w.abstract_inverted_index),
-      authors: (w.authorships ?? [])
-        .map((a) => a.author?.display_name ?? "")
-        .filter((n) => n.length > 0),
+      authors: (w.authorships ?? []).map((a) => a.author?.display_name ?? "").filter((n) => n.length > 0),
       publicationDate: w.publication_date ?? "",
       citationCount: w.cited_by_count ?? 0,
       sourceProviders: [this.name],

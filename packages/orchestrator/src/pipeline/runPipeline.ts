@@ -7,7 +7,11 @@
 
 import type { ResearchBrief, ResolutionManifestEntry } from "@udaan/contracts";
 import type { LLMProvider } from "@udaan/shared";
-import { orchestrateQuery, type QueryCache, type ResearchQueryRequest } from "../phases/query-orchestration/index.js";
+import {
+  orchestrateQuery,
+  type QueryCache,
+  type ResearchQueryRequest,
+} from "../phases/query-orchestration/index.js";
 import { runGateway } from "../phases/open-graph-gateway/index.js";
 import type { OpenGraphProvider } from "../phases/open-graph-gateway/index.js";
 import { runFullTextResolution, type ObjectStore } from "../phases/full-text-resolution/index.js";
@@ -36,9 +40,7 @@ export interface PipelineDeps {
   onPaywalled?: (entries: ResolutionManifestEntry[]) => void;
 }
 
-export type PipelineResult =
-  | { status: "ok"; brief: ResearchBrief }
-  | { status: "rejected"; reason: string };
+export type PipelineResult = { status: "ok"; brief: ResearchBrief } | { status: "rejected"; reason: string };
 
 export async function runPipeline(
   request: ResearchQueryRequest,

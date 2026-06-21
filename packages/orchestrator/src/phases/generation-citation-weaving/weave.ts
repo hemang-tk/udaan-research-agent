@@ -47,7 +47,10 @@ export async function runGeneration(graph: SynthesisGraph, deps: GenerationDeps)
 
   const sections: BriefSection[] = [];
   if (themed.length > 0) {
-    const execRaw = await generateExecutiveSummary(themed.map((s) => s.bodyText), llm);
+    const execRaw = await generateExecutiveSummary(
+      themed.map((s) => s.bodyText),
+      llm,
+    );
     const execText = filterHallucinations(execRaw, allowedAll).text;
     if (execText.trim().length > 0) {
       sections.push({ heading: "Executive Summary", bodyText: execText });

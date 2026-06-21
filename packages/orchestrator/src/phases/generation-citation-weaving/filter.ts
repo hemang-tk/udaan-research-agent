@@ -16,9 +16,7 @@ export function splitSentences(text: string): string[] {
 }
 
 function tagsIn(sentence: string): string[] {
-  return [...sentence.matchAll(TAG)]
-    .map((m) => m[1])
-    .filter((id): id is string => id !== undefined);
+  return [...sentence.matchAll(TAG)].map((m) => m[1]).filter((id): id is string => id !== undefined);
 }
 
 export interface FilterResult {

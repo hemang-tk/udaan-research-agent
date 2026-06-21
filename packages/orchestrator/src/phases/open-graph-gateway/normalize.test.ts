@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CandidatePaper } from "@udaan/contracts";
-import {
-  dropInvalid,
-  fuzzyHash,
-  normalizeDoi,
-  reconstructInvertedAbstract,
-  stripTags,
-} from "./normalize.js";
+import { dropInvalid, fuzzyHash, normalizeDoi, reconstructInvertedAbstract, stripTags } from "./normalize.js";
 
 const make = (over: Partial<CandidatePaper>): CandidatePaper => ({
   internalId: "x",

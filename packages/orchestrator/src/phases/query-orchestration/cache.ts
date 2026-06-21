@@ -33,7 +33,12 @@ const TTL_SECONDS = 24 * 60 * 60;
 
 /** Redis-backed cache (24h TTL). Lazily typed to avoid a hard ioredis import in tests. */
 export class RedisQueryCache implements QueryCache {
-  constructor(private readonly redis: { get(k: string): Promise<string | null>; set(k: string, v: string, mode: "EX", ttl: number): Promise<unknown> }) {}
+  constructor(
+    private readonly redis: {
+      get(k: string): Promise<string | null>;
+      set(k: string, v: string, mode: "EX", ttl: number): Promise<unknown>;
+    },
+  ) {}
 
   async get(key: string): Promise<CompiledDiscoveryManifest | null> {
     const raw = await this.redis.get(`q1:${key}`);

@@ -43,8 +43,7 @@ function clustersToContent(clusters: SynthesisCluster[]): string {
   return clusters
     .map(
       (c) =>
-        `Topic: ${c.generatedTopicLabel}\n` +
-        c.claims.map((x) => `- ${x.text} [${x.claimId}]`).join("\n"),
+        `Topic: ${c.generatedTopicLabel}\n` + c.claims.map((x) => `- ${x.text} [${x.claimId}]`).join("\n"),
     )
     .join("\n\n");
 }
@@ -59,10 +58,7 @@ export async function generateSection(
   });
 }
 
-export async function generateExecutiveSummary(
-  sectionTexts: string[],
-  llm: LLMProvider,
-): Promise<string> {
+export async function generateExecutiveSummary(sectionTexts: string[], llm: LLMProvider): Promise<string> {
   const content = sectionTexts.join("\n");
   const system = `${BASE_SYSTEM} Write a 2-3 sentence executive summary from the sentences below, preserving their claim ID tags.`;
   return llm.complete([{ role: "user", content }], { system });

@@ -18,10 +18,7 @@ export interface WovenBrief {
   bibliography: Record<string, BibliographyEntry>;
 }
 
-export function weaveCitations(
-  sections: BriefSection[],
-  claimMeta: Map<string, ClaimMeta>,
-): WovenBrief {
+export function weaveCitations(sections: BriefSection[], claimMeta: Map<string, ClaimMeta>): WovenBrief {
   const numbering = new Map<string, number>();
   const bibliography: Record<string, BibliographyEntry> = {};
   let counter = 0;

@@ -85,10 +85,8 @@ export async function runFullTextResolution(
   const email = deps.unpaywallEmail ?? "research@udaan.dev";
   const papers = ranked.rankedManifest;
 
-  const entries = await mapWithConcurrency(
-    papers,
-    deps.concurrency ?? MAX_CONCURRENCY,
-    (paper) => resolveOne(paper, deps.store, fetchImpl, email),
+  const entries = await mapWithConcurrency(papers, deps.concurrency ?? MAX_CONCURRENCY, (paper) =>
+    resolveOne(paper, deps.store, fetchImpl, email),
   );
 
   const successfullyResolved = entries.filter(

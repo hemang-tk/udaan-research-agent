@@ -30,7 +30,7 @@ function mockFetch(body: unknown, status = 200): void {
 
 function getFetchRequestBody(): any {
   const call = vi.mocked(fetch).mock.calls[0]!;
-  return JSON.parse(((call[1] as RequestInit).body as string));
+  return JSON.parse((call[1] as RequestInit).body as string);
 }
 
 afterEach(() => {
@@ -131,32 +131,29 @@ describe("GroqLLMProvider", () => {
 describe("AnthropicLLMProvider", () => {
   let provider: AnthropicLLMProvider;
   let mockCreate: ReturnType<typeof vi.fn>;
-    
+
   // beforeEach(async () => {
   //   // Mock the @anthropic-ai/sdk module before constructing the provider.
   //   mockCreate = vi.fn();
-    // vi.mock("@anthropic-ai/sdk", () => ({
-    //   default: vi.fn().mockImplementation(() => ({
-    //     messages: { create: mockCreate },
-    //   })),
-    // }));
+  // vi.mock("@anthropic-ai/sdk", () => ({
+  //   default: vi.fn().mockImplementation(() => ({
+  //     messages: { create: mockCreate },
+  //   })),
+  // }));
   //   const { AnthropicLLMProvider: A } = await import("./anthropic.js");
   //   provider = new A({ apiKey: "test-key", model: "claude-opus-4-8" });
   // });
-      beforeEach(() => {
-  mockCreate = vi.fn();
+  beforeEach(() => {
+    mockCreate = vi.fn();
 
-  const fakeClient = {
-    messages: {
-      create: mockCreate,
-    },
-  };
+    const fakeClient = {
+      messages: {
+        create: mockCreate,
+      },
+    };
 
-  provider = new AnthropicLLMProvider(
-    { apiKey: "test-key", model: "claude-opus-4-8" },
-    fakeClient as any,
-  );
-});
+    provider = new AnthropicLLMProvider({ apiKey: "test-key", model: "claude-opus-4-8" }, fakeClient as any);
+  });
 
   it("returns joined text blocks", async () => {
     mockCreate.mockResolvedValue({
@@ -195,9 +192,7 @@ describe("AnthropicLLMProvider", () => {
     await provider.complete(MESSAGES, { system: "Be helpful" });
     const call = mockCreate.mock.calls[0]?.[0];
     expect(call?.system).toBe("Be helpful");
-    const hasSystemRole = (call?.messages as Array<{ role: string }>)?.some(
-      (m) => m.role === "system",
-    );
+    const hasSystemRole = (call?.messages as Array<{ role: string }>)?.some((m) => m.role === "system");
     expect(hasSystemRole).toBe(false);
   });
 });

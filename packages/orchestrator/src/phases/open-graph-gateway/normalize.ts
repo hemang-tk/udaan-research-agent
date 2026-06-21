@@ -20,21 +20,25 @@ export function stripTags(text: string): string {
 /** Normalize a DOI to its bare form (no scheme/host, lowercased). */
 export function normalizeDoi(doi: string | null | undefined): string | null {
   if (!doi) return null;
-  const bare = doi.trim().toLowerCase().replace(/^https?:\/\/(dx\.)?doi\.org\//, "");
+  const bare = doi
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//, "");
   return bare.length > 0 ? bare : null;
 }
 
 /** Reconstruct plain text from OpenAlex's abstract_inverted_index. */
-export function reconstructInvertedAbstract(
-  index: Record<string, number[]> | null | undefined,
-): string {
+export function reconstructInvertedAbstract(index: Record<string, number[]> | null | undefined): string {
   if (!index) return "";
   const positions: Array<[number, string]> = [];
   for (const [word, locs] of Object.entries(index)) {
     for (const loc of locs) positions.push([loc, word]);
   }
   positions.sort((a, b) => a[0] - b[0]);
-  return positions.map(([, word]) => word).join(" ").trim();
+  return positions
+    .map(([, word]) => word)
+    .join(" ")
+    .trim();
 }
 
 /** Last name from an author string ("Smith, J." or "Jane Smith"). */

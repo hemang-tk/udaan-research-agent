@@ -72,9 +72,9 @@ describe("HTTP service clients — boundary validation", () => {
   it("rejects a parsing /ingest response with a wrong-typed field", async () => {
     mockFetchOnce({ projectId: "p1", claimsExtracted: "nope", claimIds: [] });
     const svc = new HttpParsingService("http://parsing");
-    await expect(svc.ingest({ projectId: "p1", documentDoi: null, storagePointer: "s3://vault/x.pdf" })).rejects.toThrow(
-      /IngestResult failed schema validation/,
-    );
+    await expect(
+      svc.ingest({ projectId: "p1", documentDoi: null, storagePointer: "s3://vault/x.pdf" }),
+    ).rejects.toThrow(/IngestResult failed schema validation/);
   });
 
   it("accepts a valid synthesis graph and rejects an invalid polarity", async () => {
@@ -86,6 +86,8 @@ describe("HTTP service clients — boundary validation", () => {
       projectId: "p1",
       synthesisGraph: [{ clusterId: "c1", generatedTopicLabel: "x", polarity: "WRONG", claims: [] }],
     });
-    await expect(svc.synthesize({ projectId: "p1" })).rejects.toThrow(/SynthesisGraph failed schema validation/);
+    await expect(svc.synthesize({ projectId: "p1" })).rejects.toThrow(
+      /SynthesisGraph failed schema validation/,
+    );
   });
 });

@@ -9,9 +9,7 @@ const meta = new Map<string, ClaimMeta>([
 describe("weaveCitations", () => {
   it("numbers tags in first-appearance order and dedupes repeats", () => {
     const { sections, bibliography } = weaveCitations(
-      [
-        { heading: "Conflicts", bodyText: "A [cl_a]. B [cl_b]. A again [cl_a]." },
-      ],
+      [{ heading: "Conflicts", bodyText: "A [cl_a]. B [cl_b]. A again [cl_a]." }],
       meta,
     );
     expect(sections[0]!.bodyText).toBe("A [1]. B [2]. A again [1].");
