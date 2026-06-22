@@ -24,6 +24,7 @@ def ingest_from_pointer(
     llm,
     embed,
     store,
+    chunk_store=None,
 ) -> list[ValidatedClaim]:
     """Phase 5 entry that streams the PDF from the vault by pointer (issue #24)
     rather than accepting base64 bytes over HTTP."""
@@ -31,7 +32,14 @@ def ingest_from_pointer(
     if pdf_bytes is None:
         raise FileNotFoundError(f"no object at storage pointer: {storage_pointer}")
     return ingest_document(
-        pdf_bytes, document_doi, project_id, parse=parse, llm=llm, embed=embed, store=store
+        pdf_bytes,
+        document_doi,
+        project_id,
+        parse=parse,
+        llm=llm,
+        embed=embed,
+        store=store,
+        chunk_store=chunk_store,
     )
 
 
@@ -44,6 +52,7 @@ def ingest_document(
     llm,
     embed,
     store,
+    chunk_store=None,
 ) -> list[ValidatedClaim]:
     chunks = parse(pdf_bytes)
 
@@ -54,6 +63,21 @@ def ingest_document(
     max_chunks = int(os.environ.get("MAX_CHUNKS_PER_DOC", "0") or "0")
     if max_chunks > 0:
         chunks = chunks[:max_chunks]
+
+    # Persist the raw passages as vectors too (RAG / "ask these papers"). We reuse
+    # the same chunks we already parsed, so the only added cost is embedding them —
+    # negligible. Best-effort: a chunk-store failure must not fail the run, which
+    # is about extracting claims for the brief.
+    if chunk_store is not None and chunks:
+        try:
+            chunk_payloads = [
+                {"text": c.text, "section": c.section, "page": c.page_number} for c in chunks
+            ]
+            chunk_vectors = embed.embed([c.text for c in chunks])
+            chunk_store.delete_document_chunks(project_id, document_doi)
+            chunk_store.upsert_chunks(project_id, document_doi, chunk_payloads, chunk_vectors)
+        except Exception:
+            pass
 
     claims: list[ValidatedClaim] = []
     for chunk in chunks:

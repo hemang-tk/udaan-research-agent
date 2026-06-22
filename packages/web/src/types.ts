@@ -36,3 +36,16 @@ export interface ResearchSummary {
   totalClaims: number;
   sections: number;
 }
+
+/** A passage cited by a chat answer (RAG over the brief's papers). */
+export interface ChatCitation {
+  n: number;
+  quote: string;
+  doi: string | null;
+  title?: string | null;
+}
+
+export interface AskResponse {
+  answer: string;
+  citations: ChatCitation[];
+}

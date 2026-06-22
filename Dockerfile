@@ -38,7 +38,7 @@ RUN pnpm install --frozen-lockfile
 #   ranking  -> base (Cohere rerank is stdlib HTTP)
 RUN cd /app/services/ranking   && uv sync \
  && cd /app/services/parsing   && uv sync --extra s3 --extra qdrant \
- && cd /app/services/synthesis && uv sync --extra qdrant
+ && cd /app/services/synthesis && uv sync --extra ml --extra qdrant
 
 EXPOSE 7860
 CMD ["bash", "infra/hf-space/start.sh"]

@@ -4,17 +4,18 @@ import { HistoryPage } from "./pages/HistoryPage.js";
 import { ResearchDetailPage } from "./pages/ResearchDetailPage.js";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
-  `nav__link${isActive ? " nav__link--active" : ""}`;
+  `navlink${isActive ? " navlink--active" : ""}`;
 
 export function App() {
   return (
     <div className="app">
-      <header className="masthead">
-        <NavLink to="/" className="masthead__brand">
-          <span className="masthead__mark">Udaan</span>
-          <span className="masthead__tag">Research Synthesis Engine</span>
+      <header className="topbar">
+        <NavLink to="/" className="topbar__brand" aria-label="Udaan home">
+          <span className="topbar__mark">U</span>
+          <span className="topbar__name">Udaan</span>
+          <span className="topbar__tag">Research Synthesis</span>
         </NavLink>
-        <nav className="nav" aria-label="Primary">
+        <nav className="topbar__nav" aria-label="Primary">
           <NavLink to="/" end className={navClass}>
             New Research
           </NavLink>
@@ -24,16 +25,13 @@ export function App() {
         </nav>
       </header>
 
-      <Routes>
-        <Route path="/" element={<NewResearchPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/research/:id" element={<ResearchDetailPage />} />
-      </Routes>
-
-      <footer className="foot">
-        <span>Udaan Research Agent</span>
-        <span className="foot__note">Claims you can click through to the source.</span>
-      </footer>
+      <div className="main">
+        <Routes>
+          <Route path="/" element={<NewResearchPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/research/:id" element={<ResearchDetailPage />} />
+        </Routes>
+      </div>
     </div>
   );
 }

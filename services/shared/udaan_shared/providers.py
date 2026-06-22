@@ -57,9 +57,11 @@ def _resolve(registry: dict, name: str, kind: str):
     return factory
 
 
-def create_llm_provider(config: Config) -> LLMProvider:
+def create_llm_provider(config: Config, *, round_robin: bool = True) -> LLMProvider:
     # LLM_PROVIDER may list several providers ("gemini,groq") for round-robin +
     # failover across independent free tiers. A single name resolves directly.
+    # round_robin=False makes a multi-provider list strict priority (try the first,
+    # fail over only on error) — used for chat (Groq first, Anthropic backstop).
     names = [n.strip() for n in config.llm_provider.split(",") if n.strip()]
     if len(names) <= 1:
         return _resolve(_llm_registry, names[0] if names else config.llm_provider, "LLM")(config)
@@ -73,7 +75,7 @@ def create_llm_provider(config: Config) -> LLMProvider:
         )
         for name in names
     ]
-    return MultiLLMProvider(providers, names)
+    return MultiLLMProvider(providers, names, round_robin=round_robin)
 
 
 def create_embedding_provider(config: Config) -> EmbeddingProvider:

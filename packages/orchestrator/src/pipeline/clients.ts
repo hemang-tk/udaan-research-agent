@@ -33,6 +33,17 @@ export interface RankingService {
   quality?(): Promise<StageQuality[]>;
 }
 
+export interface AskCitation {
+  n: number;
+  quote: string;
+  doi: string | null;
+  title: string | null;
+}
+export interface AskResult {
+  answer: string;
+  citations: AskCitation[];
+}
+
 export interface ParsingService {
   ingest(input: {
     projectId: string;
@@ -40,6 +51,9 @@ export interface ParsingService {
     /** Vault pointer (s3://bucket/key); the parser reads the PDF directly. */
     storagePointer: string;
   }): Promise<IngestResult>;
+  /** RAG chat over a project's stored passages ("ask these papers"). Optional on
+   *  the interface (the pipeline never calls it); the server uses the concrete class. */
+  ask?(input: { projectId: string; question: string; topK?: number }): Promise<AskResult>;
   quality?(): Promise<StageQuality[]>;
 }
 
@@ -114,6 +128,19 @@ export class HttpParsingService implements ParsingService {
       timeoutMs: INGEST_TIMEOUT_MS,
       retries: 0,
     });
+  }
+  async ask(input: { projectId: string; question: string; topK?: number }): Promise<AskResult> {
+    const res = await resilientFetch(
+      `${this.baseUrl}/ask`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: 60_000, retries: 1 },
+    );
+    if (!res.ok) throw new Error(`${this.baseUrl}/ask -> ${res.status} ${res.statusText}`);
+    return (await res.json()) as AskResult;
   }
   quality() {
     return fetchQuality(this.baseUrl);

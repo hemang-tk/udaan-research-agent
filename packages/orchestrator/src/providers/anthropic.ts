@@ -42,10 +42,15 @@ export class AnthropicLLMProvider implements LLMProvider {
     const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: this.opts.model,
       max_tokens: options?.maxTokens ?? 4096,
-      thinking: (options?.thinking ?? { type: "adaptive" }) as Anthropic.ThinkingConfigParam,
       messages: anthropicMessages,
       ...(options?.system ? { system: options.system } : {}),
     };
+    // Adaptive thinking only where it's valid: Haiku 4.5 doesn't support it (400),
+    // and it can't be combined with a forced tool_choice (400) — the jsonSchema path
+    // below forces a tool, so thinking is skipped there too.
+    if (!options?.jsonSchema && !this.opts.model.toLowerCase().includes("haiku")) {
+      params.thinking = (options?.thinking ?? { type: "adaptive" }) as Anthropic.ThinkingConfigParam;
+    }
 
     // JSON mode: use a forced tool call so the model returns structured output.
     if (options?.jsonSchema) {
