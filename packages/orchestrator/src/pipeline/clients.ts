@@ -54,7 +54,18 @@ export interface SynthesisService {
 // Override with SERVICE_TIMEOUT_MS for slower/faster hosts.
 const SERVICE_TIMEOUT_MS = Number(process.env.SERVICE_TIMEOUT_MS) || 120_000;
 
-async function postJson<T>(url: string, body: unknown, validate: (data: unknown) => T): Promise<T> {
+// Per-document ingest (Phase 5) gets its OWN bounded timeout and NO retry: one
+// slow/hung document (huge PDF, LlamaParse stall, rate-limit storm) must not stall
+// the whole run. On timeout it throws, the Phase 5 loop catches it, skips that
+// document, and presses on — so a run always completes. Override with INGEST_TIMEOUT_MS.
+const INGEST_TIMEOUT_MS = Number(process.env.INGEST_TIMEOUT_MS) || 120_000;
+
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  validate: (data: unknown) => T,
+  opts: { timeoutMs?: number; retries?: number } = {},
+): Promise<T> {
   // Inter-service calls are effectively idempotent (rerank/ingest/synthesize for
   // a project), so a bounded retry with timeout is safe and avoids turning a
   // transient blip or a hung service into a hard pipeline failure.
@@ -65,7 +76,7 @@ async function postJson<T>(url: string, body: unknown, validate: (data: unknown)
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     },
-    { timeoutMs: SERVICE_TIMEOUT_MS, retries: 2 },
+    { timeoutMs: opts.timeoutMs ?? SERVICE_TIMEOUT_MS, retries: opts.retries ?? 2 },
   );
   if (!res.ok) throw new Error(`${url} -> ${res.status} ${res.statusText}`);
   // Validate at the boundary: a malformed/changed service response is rejected
@@ -98,7 +109,11 @@ export class HttpRankingService implements RankingService {
 export class HttpParsingService implements ParsingService {
   constructor(private readonly baseUrl: string) {}
   ingest(input: { projectId: string; documentDoi: string | null; storagePointer: string }) {
-    return postJson(`${this.baseUrl}/ingest`, input, validateIngestResult);
+    // Bounded, no-retry: a slow document is abandoned and skipped, never stalls the run.
+    return postJson(`${this.baseUrl}/ingest`, input, validateIngestResult, {
+      timeoutMs: INGEST_TIMEOUT_MS,
+      retries: 0,
+    });
   }
   quality() {
     return fetchQuality(this.baseUrl);

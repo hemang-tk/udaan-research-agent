@@ -26,6 +26,33 @@ def _active_parser() -> str:
     return os.environ.get("PARSER", "").strip().lower()
 
 
+def _cap_pdf_pages(data: bytes) -> bytes:
+    """Truncate an oversized PDF to its first MAX_PDF_PAGES pages (0/unset = no cap).
+    Research papers front-load the abstract/intro/findings, and MAX_CHUNKS_PER_DOC
+    already bounds extraction, so parsing all 50 pages of a giant PDF is wasted
+    time/credits (and a stall risk). Returns the original bytes when under the cap,
+    when no cap is set, or when the PDF can't be split (corrupt/encrypted) — in that
+    last case the orchestrator's bounded ingest timeout is the backstop that skips a
+    doc that then parses too slowly."""
+    max_pages = int(os.environ.get("MAX_PDF_PAGES", "0") or "0")
+    if max_pages <= 0:
+        return data
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        reader = PdfReader(io.BytesIO(data))
+        if len(reader.pages) <= max_pages:
+            return data
+        writer = PdfWriter()
+        for page in reader.pages[:max_pages]:
+            writer.add_page(page)
+        out = io.BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception:
+        return data  # can't split — let the parser try; ingest timeout guards the run
+
+
 def parser_quality() -> tuple[str, bool]:
     """Report the active parser implementation and whether it is degraded
     (issue #17). LlamaParse/Docling are layout-aware (not degraded); pypdf is
@@ -96,6 +123,7 @@ def parse_llamaparse(data: bytes) -> list[Chunk]:
     api_key = os.environ.get("LLAMAPARSE_API_KEY")
     if not api_key:
         raise RuntimeError("LLAMAPARSE_API_KEY is not set (required when PARSER=llamaparse)")
+    data = _cap_pdf_pages(data)  # bound parse time + LlamaParse credits on huge PDFs
     job_id = _llamaparse_upload(data, api_key)
     _llamaparse_wait(job_id, api_key)
     # LlamaParse returns Markdown; strip the leading `#`/`##` markers so chunk_pages'
@@ -151,6 +179,7 @@ def _parse_docling(data: bytes) -> list[Chunk]:
 def parse_pdf(data: bytes) -> list[Chunk]:
     """Parse a PDF into context-preserving chunks. Uses Docling if installed,
     otherwise pypdf page extraction + paragraph chunking."""
+    data = _cap_pdf_pages(data)  # bound parse time on huge PDFs
     try:
         chunks = _parse_docling(data)
         if chunks:

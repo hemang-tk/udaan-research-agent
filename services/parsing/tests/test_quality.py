@@ -45,3 +45,42 @@ def test_llamaparse_requires_key(monkeypatch):
 
     with pytest.raises(RuntimeError, match="LLAMAPARSE_API_KEY"):
         parse_llamaparse(b"%PDF-1.4 fake")
+
+
+def _make_pdf(pages: int) -> bytes:
+    import io
+
+    from pypdf import PdfWriter
+
+    w = PdfWriter()
+    for _ in range(pages):
+        w.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def test_cap_pdf_pages_truncates_oversized(monkeypatch):
+    from pypdf import PdfReader
+    from udaan_parsing.parser import _cap_pdf_pages
+
+    monkeypatch.setenv("MAX_PDF_PAGES", "5")
+    capped = _cap_pdf_pages(_make_pdf(20))
+    import io
+
+    assert len(PdfReader(io.BytesIO(capped)).pages) == 5
+
+
+def test_cap_pdf_pages_passthrough(monkeypatch):
+    from udaan_parsing.parser import _cap_pdf_pages
+
+    pdf = _make_pdf(3)
+    # No cap set -> unchanged.
+    monkeypatch.delenv("MAX_PDF_PAGES", raising=False)
+    assert _cap_pdf_pages(pdf) == pdf
+    # Under the cap -> unchanged.
+    monkeypatch.setenv("MAX_PDF_PAGES", "10")
+    assert _cap_pdf_pages(pdf) == pdf
+    # Unsplittable bytes -> returned as-is (ingest timeout is the backstop).
+    monkeypatch.setenv("MAX_PDF_PAGES", "1")
+    assert _cap_pdf_pages(b"not a pdf") == b"not a pdf"
