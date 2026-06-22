@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { ResolutionManifestEntry } from "@udaan/contracts";
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { loadConfig } from "@udaan/shared";
 import { S3ObjectStore, storageKey, type ObjectStore } from "./phases/full-text-resolution/index.js";
@@ -36,6 +37,22 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     logger: false,
     ajv: { customOptions: { coerceTypes: false, removeAdditional: false } },
   });
+
+  // CORS: let the deployed frontend (cross-origin fetch + EventSource) call this
+  // API. Origins come from CORS_ORIGINS (comma-separated). When unset, reflect the
+  // request origin — convenient for local/tunnel demos. Read from env directly (not
+  // loadConfig) so buildServer needs no infra env in tests. `ngrok-skip-browser-warning`
+  // is allowed so the browser bypasses ngrok's free-tier interstitial page.
+  const corsOrigins = (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.register(cors, {
+    origin: corsOrigins.length > 0 ? corsOrigins : true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["content-type", "ngrok-skip-browser-warning"],
+  });
+
   const jobs = new Map<string, Job>();
 
   let store = options.store ?? null;
@@ -158,10 +175,17 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     }
     reply.hijack();
     const raw = reply.raw;
+    // reply.hijack() bypasses the @fastify/cors hook, so set the CORS header here
+    // by hand — otherwise a cross-origin EventSource (e.g. the Netlify frontend)
+    // is blocked. Reflect the request origin when it is allowed.
+    const origin = req.headers.origin;
+    const allowOrigin =
+      origin && (corsOrigins.length === 0 || corsOrigins.includes(origin)) ? origin : undefined;
     raw.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
+      ...(allowOrigin ? { "access-control-allow-origin": allowOrigin } : {}),
     });
 
     let sent = 0;

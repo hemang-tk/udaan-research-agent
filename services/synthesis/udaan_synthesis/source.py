@@ -24,10 +24,11 @@ class InMemoryClaimSource:
 
 
 class QdrantClaimSource:
-    def __init__(self, url: str, collection: str = "claims") -> None:
+    def __init__(self, url: str, collection: str = "claims", *, api_key: str | None = None) -> None:
         from qdrant_client import QdrantClient
 
-        self.client = QdrantClient(url=url)
+        # api_key is required for Qdrant Cloud, omitted for a local/docker Qdrant.
+        self.client = QdrantClient(url=url, api_key=api_key)
         self.collection = collection
 
     def fetch_findings(self, project_id: str) -> list[ValidatedClaim]:

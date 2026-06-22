@@ -4,6 +4,7 @@ Dependencies are injected so the pipeline is testable without ML/infra."""
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 from udaan_contracts import ValidatedClaim
@@ -45,6 +46,14 @@ def ingest_document(
     store,
 ) -> list[ValidatedClaim]:
     chunks = parse(pdf_bytes)
+
+    # Cap chunks per document (0/unset = no cap). Claim extraction is one LLM call
+    # per chunk, so a single very long PDF can otherwise dominate a whole run; this
+    # bounds each paper's cost. Chunks are in document order, so the cap keeps the
+    # earlier sections (title/abstract/intro), which carry the headline claims.
+    max_chunks = int(os.environ.get("MAX_CHUNKS_PER_DOC", "0") or "0")
+    if max_chunks > 0:
+        chunks = chunks[:max_chunks]
 
     claims: list[ValidatedClaim] = []
     for chunk in chunks:

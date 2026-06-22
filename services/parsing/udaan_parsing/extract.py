@@ -36,8 +36,9 @@ def deterministic_claim_id(
 EXTRACTION_SYSTEM = (
     "You are a strict claim extractor for scientific text. From the passage, "
     "extract discrete factual propositions. For each, return: claimText (a concise "
-    "restatement), sourceQuote (an EXACT substring copied verbatim from the passage, "
-    "unmodified), and claimClassification (one of FINDING, HYPOTHESIS, LIMITATION, "
+    "restatement, written in English regardless of the passage's language), sourceQuote "
+    "(an EXACT substring copied verbatim from the passage, unmodified, in its original "
+    "language), and claimClassification (one of FINDING, HYPOTHESIS, LIMITATION, "
     "METHODOLOGY). Do not summarize the passage or invent content. Respond ONLY as "
     'JSON: {"claims": [{"claimText": "...", "sourceQuote": "...", "claimClassification": "..."}]}.'
 )

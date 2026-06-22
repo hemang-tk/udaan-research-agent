@@ -51,21 +51,41 @@ class QdrantClaimStore:
     """Stores claims as points with payload indexing on projectId / documentDoi /
     claimClassification (Phase 5 §4.1)."""
 
-    def __init__(self, url: str, collection: str = "claims", dim: int = 384) -> None:
+    def __init__(
+        self, url: str, collection: str = "claims", dim: int = 384, *, api_key: str | None = None
+    ) -> None:
         from qdrant_client import QdrantClient
+
+        # api_key is required for Qdrant Cloud, omitted for a local/docker Qdrant.
+        self.client = QdrantClient(url=url, api_key=api_key)
+        self.collection = collection
+        self._default_dim = dim
+        # Create lazily on first upsert, sized to the ACTUAL embedding dimension.
+        # Real models (BGE = 768) and the hashing fallback (384) differ, so a fixed
+        # size 400s with a dimension mismatch; a stale collection is recreated.
+        self._ready_dim: int | None = None
+
+    def _ensure_collection(self, dim: int) -> None:
         from qdrant_client.models import Distance, VectorParams
 
-        self.client = QdrantClient(url=url)
-        self.collection = collection
+        if self._ready_dim == dim:
+            return
+        current: int | None = None
         try:
-            self.client.get_collection(collection)
+            current = self.client.get_collection(self.collection).config.params.vectors.size
         except Exception:
+            current = None
+        if current != dim:
+            try:
+                self.client.delete_collection(self.collection)
+            except Exception:
+                pass
             self.client.create_collection(
-                collection_name=collection,
+                collection_name=self.collection,
                 vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
             )
-        # Payload indexes make the per-document filtered delete cheap.
-        self._ensure_payload_indexes()
+            self._ensure_payload_indexes()
+        self._ready_dim = dim
 
     def _ensure_payload_indexes(self) -> None:
         from qdrant_client.models import PayloadSchemaType
@@ -100,10 +120,14 @@ class QdrantClaimStore:
     def delete_document_claims(self, project_id: str, document_doi: str | None) -> None:
         from qdrant_client.models import FilterSelector
 
-        self.client.delete(
-            collection_name=self.collection,
-            points_selector=FilterSelector(filter=self._document_filter(project_id, document_doi)),
-        )
+        try:
+            self.client.delete(
+                collection_name=self.collection,
+                points_selector=FilterSelector(filter=self._document_filter(project_id, document_doi)),
+            )
+        except Exception:
+            # Collection may not exist yet on the first ingest — nothing to delete.
+            pass
 
     def upsert(self, claims: list[ValidatedClaim]) -> None:
         from qdrant_client.models import PointStruct
@@ -117,4 +141,5 @@ class QdrantClaimStore:
                 PointStruct(id=_point_id(claim.claim_id), vector=claim.vector_embedding, payload=payload)
             )
         if points:
+            self._ensure_collection(len(points[0].vector))
             self.client.upsert(collection_name=self.collection, points=points)

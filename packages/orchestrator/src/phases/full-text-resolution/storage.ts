@@ -4,7 +4,14 @@
  * real bucket at deploy via the same config (storagePointer stays s3://...).
  */
 
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CreateBucketCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import type { S3Config } from "@udaan/shared";
 import type { ObjectStore } from "./types.js";
 
@@ -44,6 +51,7 @@ export class InMemoryObjectStore implements ObjectStore {
 
 export class S3ObjectStore implements ObjectStore {
   private readonly client: S3Client;
+  private bucketReady?: Promise<void>;
 
   constructor(private readonly s3: S3Config) {
     this.client = new S3Client({
@@ -52,6 +60,25 @@ export class S3ObjectStore implements ObjectStore {
       forcePathStyle: true, // required for MinIO
       credentials: { accessKeyId: s3.accessKey, secretAccessKey: s3.secretKey },
     });
+  }
+
+  /** Ensure the vault bucket exists (idempotent, once per process). A fresh MinIO
+   *  has no buckets, so without this every put() fails with NoSuchBucket. On real S3
+   *  where the bucket is pre-provisioned, HeadBucket succeeds and we skip creation. */
+  private ensureBucket(): Promise<void> {
+    this.bucketReady ??= (async () => {
+      try {
+        await this.client.send(new HeadBucketCommand({ Bucket: this.s3.bucket }));
+      } catch {
+        try {
+          await this.client.send(new CreateBucketCommand({ Bucket: this.s3.bucket }));
+        } catch {
+          // Already created by a racing call, or no create permission — in the
+          // latter case the subsequent put() surfaces the real error.
+        }
+      }
+    })();
+    return this.bucketReady;
   }
 
   async exists(key: string): Promise<boolean> {
@@ -74,6 +101,7 @@ export class S3ObjectStore implements ObjectStore {
   }
 
   async put(key: string, bytes: Uint8Array, contentType: string): Promise<string> {
+    await this.ensureBucket();
     await this.client.send(
       new PutObjectCommand({ Bucket: this.s3.bucket, Key: key, Body: bytes, ContentType: contentType }),
     );

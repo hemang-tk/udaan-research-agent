@@ -4,12 +4,8 @@
  * Temperature 0 for determinism.
  */
 
-import {
-  registerLLMProvider,
-  type LLMCompleteOptions,
-  type LLMMessage,
-  type LLMProvider,
-} from "@udaan/shared";
+import { registerLLMProvider, type LLMCompleteOptions, type LLMMessage, type LLMProvider } from "@udaan/shared";
+import { resilientFetch } from "../util/resilience.js";
 
 interface GroqChatResponse {
   choices?: Array<{
@@ -43,14 +39,22 @@ export class GroqLLMProvider implements LLMProvider {
       body.response_format = { type: "json_object" };
     }
 
-    const res = await fetch(`${GroqLLMProvider.BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${this.opts.apiKey}`,
+    // Free Groq tiers rate-limit (429 with a ~40s Retry-After on TPM). Route
+    // through resilientFetch so generation honours Retry-After and rides out the
+    // per-minute window instead of hard-failing — parity with the Python
+    // _post_with_retry path that already lets Phase 5 survive the same limit.
+    const res = await resilientFetch(
+      `${GroqLLMProvider.BASE_URL}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.opts.apiKey}`,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      { timeoutMs: 60_000, retries: 3, baseDelayMs: 1_000, maxDelayMs: 60_000 },
+    );
 
     if (!res.ok) {
       const errText = await res.text().catch(() => res.statusText);

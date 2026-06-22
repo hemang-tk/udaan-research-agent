@@ -23,6 +23,13 @@ dev = ["pytest>=8", "httpx>=0.27"]
 [tool.uv.sources]
 udaan-contracts = { path = "../../packages/contracts/python", editable = true }
 udaan-shared = { path = "../shared", editable = true }
+# CUDA build so the cross-encoder reranker runs on the GPU (see parsing pyproject).
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

@@ -1,6 +1,9 @@
 import type { Config } from "@udaan/shared";
 import { createLLMProvider } from "@udaan/shared";
 import { registerOllama } from "../providers/ollama.js";
+import { registerGemini } from "../providers/gemini.js";
+import { registerGroq } from "../providers/groq.js";
+import { registerAnthropic } from "../providers/anthropic.js";
 import { InMemoryQueryCache } from "../phases/query-orchestration/index.js";
 import { defaultAdapters } from "../phases/open-graph-gateway/index.js";
 import { S3ObjectStore } from "../phases/full-text-resolution/index.js";
@@ -17,7 +20,13 @@ export interface BuildDepsHooks {
 }
 
 export function buildPipelineDeps(config: Config, hooks: BuildDepsHooks = {}): PipelineDeps {
+  // Register every LLM provider so createLLMProvider() can resolve any LLM_PROVIDER
+  // (ollama | gemini | groq | anthropic). server.ts/worker.ts reach providers via
+  // this path, not src/index.ts, so the registrations must live here too.
   registerOllama();
+  registerGemini();
+  registerGroq();
+  registerAnthropic();
   return {
     llm: createLLMProvider(config),
     cache: new InMemoryQueryCache(),

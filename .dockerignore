@@ -1,0 +1,15 @@
+# Keep host-built artifacts out of the image — they're reinstalled in the build.
+# Critical: the host .venv dirs may carry CUDA torch (GPU), which must NOT leak
+# into the CPU-only Space image.
+**/node_modules
+**/.venv
+**/.turbo
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+.git
+.github
+.logs
+infra/.env
+**/dist
+**/*.log

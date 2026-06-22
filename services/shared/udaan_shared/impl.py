@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import time
 
 import httpx
 
@@ -37,6 +38,38 @@ def _ollama_timeout() -> float:
         except ValueError:
             pass
     return _DEFAULT_OLLAMA_TIMEOUT_S
+
+
+_LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "6"))
+
+
+def _post_with_retry(
+    url: str, *, json: dict, headers: dict | None = None, timeout: float = 60.0
+) -> httpx.Response:
+    """POST with bounded exponential backoff on 429 (rate limit) and 5xx/transient
+    errors, honoring a numeric Retry-After. Free LLM tiers (e.g. Groq) rate-limit the
+    per-chunk extraction calls, so without this the pipeline 500s under load."""
+    delay = 1.0
+    for attempt in range(_LLM_MAX_RETRIES + 1):
+        try:
+            resp = httpx.post(url, json=json, headers=headers, timeout=timeout)
+        except (httpx.TimeoutException, httpx.TransportError):
+            if attempt == _LLM_MAX_RETRIES:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 30.0)
+            continue
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt == _LLM_MAX_RETRIES:
+                resp.raise_for_status()
+            ra = resp.headers.get("retry-after")
+            wait = float(ra) if ra and ra.replace(".", "", 1).isdigit() else delay
+            time.sleep(min(wait, 60.0))
+            delay = min(delay * 2, 30.0)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise RuntimeError("unreachable")  # pragma: no cover
 
 
 class OllamaLLMProvider:
@@ -191,13 +224,12 @@ class GroqLLMProvider:
         if json_schema is not None:
             body["response_format"] = {"type": "json_object"}
 
-        resp = httpx.post(
+        resp = _post_with_retry(
             f"{self._BASE_URL}/chat/completions",
             json=body,
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=60.0,
         )
-        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
 

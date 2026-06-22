@@ -48,6 +48,12 @@ export interface SynthesisService {
   quality?(): Promise<StageQuality[]>;
 }
 
+// Inter-service call timeout. Default is generous because the Python services may
+// run real ML models on CPU (cross-encoder rerank, embeddings) where a request —
+// especially the first, which loads the model — can take far longer than a web call.
+// Override with SERVICE_TIMEOUT_MS for slower/faster hosts.
+const SERVICE_TIMEOUT_MS = Number(process.env.SERVICE_TIMEOUT_MS) || 120_000;
+
 async function postJson<T>(url: string, body: unknown, validate: (data: unknown) => T): Promise<T> {
   // Inter-service calls are effectively idempotent (rerank/ingest/synthesize for
   // a project), so a bounded retry with timeout is safe and avoids turning a
@@ -59,7 +65,7 @@ async function postJson<T>(url: string, body: unknown, validate: (data: unknown)
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     },
-    { timeoutMs: 30_000, retries: 2 },
+    { timeoutMs: SERVICE_TIMEOUT_MS, retries: 2 },
   );
   if (!res.ok) throw new Error(`${url} -> ${res.status} ${res.statusText}`);
   // Validate at the boundary: a malformed/changed service response is rejected
