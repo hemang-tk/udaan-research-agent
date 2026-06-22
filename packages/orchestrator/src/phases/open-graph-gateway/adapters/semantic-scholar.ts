@@ -21,7 +21,7 @@ export class SemanticScholarAdapter implements OpenGraphProvider {
 
   constructor(
     private readonly baseUrl = "https://api.semanticscholar.org/graph/v1",
-    private readonly limit = 100,
+    private readonly limit = 50,
   ) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {
