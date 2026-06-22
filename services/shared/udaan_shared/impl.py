@@ -179,10 +179,15 @@ class GeminiLLMProvider:
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self._model}:generateContent?key={self._api_key}"
+            f"{self._model}:generateContent"
         )
-        resp = httpx.post(url, json=body, timeout=60.0)
-        resp.raise_for_status()
+        # Retry on 429 (free-tier RPM) / 5xx with backoff, honouring Retry-After —
+        # Gemini free tiers rate-limit the per-chunk extraction, so a bare POST
+        # fails every ingest (0 claims). Key goes in a header, not the query string,
+        # so it never leaks into request logs / error URLs.
+        resp = _post_with_retry(
+            url, json=body, headers={"x-goog-api-key": self._api_key}, timeout=60.0
+        )
         data = resp.json()
         return (
             data.get("candidates", [{}])[0]
