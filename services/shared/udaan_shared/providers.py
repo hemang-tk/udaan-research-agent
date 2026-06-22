@@ -58,7 +58,22 @@ def _resolve(registry: dict, name: str, kind: str):
 
 
 def create_llm_provider(config: Config) -> LLMProvider:
-    return _resolve(_llm_registry, config.llm_provider, "LLM")(config)
+    # LLM_PROVIDER may list several providers ("gemini,groq") for round-robin +
+    # failover across independent free tiers. A single name resolves directly.
+    names = [n.strip() for n in config.llm_provider.split(",") if n.strip()]
+    if len(names) <= 1:
+        return _resolve(_llm_registry, names[0] if names else config.llm_provider, "LLM")(config)
+    from dataclasses import replace
+
+    from .impl import MultiLLMProvider  # lazy: impl imports this module
+
+    providers = [
+        _resolve(_llm_registry, name, "LLM")(
+            replace(config, llm_provider=name, llm_model=config.llm_models.get(name, config.llm_model))
+        )
+        for name in names
+    ]
+    return MultiLLMProvider(providers, names)
 
 
 def create_embedding_provider(config: Config) -> EmbeddingProvider:

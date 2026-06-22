@@ -42,6 +42,9 @@ class Config:
     rerank_provider: str
     ollama_url: str
     llm_model: str
+    # Per-provider model overrides (LLM_MODEL_GROQ, LLM_MODEL_GEMINI, …) used when
+    # LLM_PROVIDER lists several providers (round-robin) that need different ids.
+    llm_models: dict[str, str]
     embedding_model: str
     rerank_model: str
     api_keys: dict[str, str | None]
@@ -66,6 +69,11 @@ def load_config() -> Config:
         rerank_provider=_optional("RERANK_PROVIDER", "local") or "local",
         ollama_url=_required("OLLAMA_URL"),
         llm_model=_required("LLM_MODEL"),
+        llm_models={
+            p: m
+            for p in ("ollama", "gemini", "groq", "anthropic")
+            if (m := _optional(f"LLM_MODEL_{p.upper()}"))
+        },
         embedding_model=_required("EMBEDDING_MODEL"),
         rerank_model=_required("RERANK_MODEL"),
         api_keys={

@@ -35,6 +35,42 @@ export interface LLMProvider {
   complete(messages: LLMMessage[], options?: LLMCompleteOptions): Promise<string>;
 }
 
+/**
+ * Spreads calls across several LLM providers (round-robin) and fails over to the
+ * next on error. Independent free tiers (e.g. Gemini + Groq) share the load, so a
+ * run only stalls if EVERY provider is rate-limited at once. Each provider keeps
+ * its own internal retry; this wrapper adds the cross-provider failover.
+ */
+export class MultiLLMProvider implements LLMProvider {
+  private next = 0;
+
+  constructor(
+    private readonly providers: LLMProvider[],
+    private readonly names: readonly string[] = [],
+  ) {
+    if (providers.length === 0) throw new Error("MultiLLMProvider needs at least one provider");
+  }
+
+  async complete(messages: LLMMessage[], options?: LLMCompleteOptions): Promise<string> {
+    const n = this.providers.length;
+    const start = this.next;
+    this.next = (this.next + 1) % n; // round-robin the starting provider per call
+    let lastError: unknown;
+    for (let i = 0; i < n; i++) {
+      const provider = this.providers[(start + i) % n]!; // index always in range
+      try {
+        return await provider.complete(messages, options);
+      } catch (err) {
+        lastError = err; // failover to the next provider
+      }
+    }
+    const label = this.names.length ? ` (${this.names.join(", ")})` : "";
+    throw new Error(
+      `All LLM providers failed${label}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    );
+  }
+}
+
 export interface EmbeddingProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
@@ -76,7 +112,23 @@ function resolve<N, F>(registry: Map<N, F>, name: N, kind: string): F {
 }
 
 export function createLLMProvider(config: Config): LLMProvider {
-  return resolve(llmRegistry, config.providers.llm, "LLM")(config);
+  const names = config.providers.llmList;
+  // Single provider: resolve directly (unchanged behaviour).
+  if (names.length <= 1) {
+    return resolve(llmRegistry, config.providers.llm, "LLM")(config);
+  }
+  // Several providers: build each with its own model (LLM_MODEL_<PROVIDER>,
+  // falling back to LLM_MODEL) and wrap in a round-robin + failover provider.
+  const providers = names.map((name) => {
+    const model = config.models.llmByProvider[name] ?? config.models.llm;
+    const subConfig: Config = {
+      ...config,
+      providers: { ...config.providers, llm: name },
+      models: { ...config.models, llm: model },
+    };
+    return resolve(llmRegistry, name, "LLM")(subConfig);
+  });
+  return new MultiLLMProvider(providers, names);
 }
 export function createEmbeddingProvider(config: Config): EmbeddingProvider {
   return resolve(embeddingRegistry, config.providers.embedding, "embedding")(config);

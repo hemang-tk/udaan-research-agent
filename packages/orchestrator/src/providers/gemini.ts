@@ -10,6 +10,7 @@ import {
   type LLMMessage,
   type LLMProvider,
 } from "@udaan/shared";
+import { resilientFetch } from "../util/resilience.js";
 
 interface GeminiContent {
   role: "user" | "model";
@@ -56,13 +57,20 @@ export class GeminiLLMProvider implements LLMProvider {
       ...(systemInstruction ? { systemInstruction } : {}),
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.opts.model}:generateContent?key=${this.opts.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.opts.model}:generateContent`;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    // Retry on 429 (free-tier RPM) / 5xx, honouring Retry-After — Gemini free
+    // tiers rate-limit. Key goes in a header, not the query string, so it doesn't
+    // leak into request logs / error URLs.
+    const res = await resilientFetch(
+      url,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": this.opts.apiKey },
+        body: JSON.stringify(body),
+      },
+      { timeoutMs: 60_000, retries: 3, baseDelayMs: 1_000, maxDelayMs: 60_000 },
+    );
 
     if (!res.ok) {
       const errText = await res.text().catch(() => res.statusText);

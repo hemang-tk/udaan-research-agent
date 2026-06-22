@@ -23,12 +23,24 @@ export interface Config {
   databaseUrl?: string;
   s3: S3Config;
   providers: {
+    /** Primary LLM provider (first of llmList). */
     llm: LLMProviderName;
+    /** All configured LLM providers. LLM_PROVIDER may be comma-separated
+     *  (e.g. "gemini,groq") for round-robin + failover across independent free
+     *  tiers, so a run only stalls if every provider is rate-limited at once. */
+    llmList: LLMProviderName[];
     embedding: EmbeddingProviderName;
     rerank: RerankProviderName;
   };
   ollamaUrl: string;
-  models: { llm: string; embedding: string; rerank: string };
+  models: {
+    llm: string;
+    /** Optional per-provider model override (LLM_MODEL_GROQ, LLM_MODEL_GEMINI, …)
+     *  used when several providers are listed and need different model ids. */
+    llmByProvider: Partial<Record<LLMProviderName, string>>;
+    embedding: string;
+    rerank: string;
+  };
   apiKeys: { gemini?: string; groq?: string; anthropic?: string; cohere?: string };
   services: { ranking: string; parsing: string; synthesis: string };
   /** Per-provider hard timeout (ms) for the Phase 2 academic-graph fan-out.
@@ -68,7 +80,20 @@ function parseEnum<T extends string>(name: string, value: string, allowed: reado
   throw new Error(`Invalid ${name}=${value}. Allowed: ${allowed.join(", ")}`);
 }
 
+/** Parse a comma-separated list of enum values (each validated). At least one. */
+function parseEnumList<T extends string>(name: string, value: string, allowed: readonly T[]): T[] {
+  const parts = value.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) throw new Error(`Invalid ${name}: empty`);
+  return parts.map((p) => parseEnum(name, p, allowed));
+}
+
 export function loadConfig(): Config {
+  const llmList = parseEnumList("LLM_PROVIDER", optional("LLM_PROVIDER") ?? "ollama", LLM_PROVIDERS);
+  const llmByProvider: Partial<Record<LLMProviderName, string>> = {};
+  for (const p of LLM_PROVIDERS) {
+    const m = optional(`LLM_MODEL_${p.toUpperCase()}`);
+    if (m) llmByProvider[p] = m;
+  }
   return {
     qdrantUrl: required("QDRANT_URL"),
     redisUrl: required("REDIS_URL"),
@@ -81,13 +106,15 @@ export function loadConfig(): Config {
       region: optional("S3_REGION") ?? "us-east-1",
     },
     providers: {
-      llm: parseEnum("LLM_PROVIDER", optional("LLM_PROVIDER") ?? "ollama", LLM_PROVIDERS),
+      llm: llmList[0]!, // parseEnumList guarantees at least one
+      llmList,
       embedding: parseEnum("EMBEDDING_PROVIDER", optional("EMBEDDING_PROVIDER") ?? "local", EMBEDDING_PROVIDERS),
       rerank: parseEnum("RERANK_PROVIDER", optional("RERANK_PROVIDER") ?? "local", RERANK_PROVIDERS),
     },
     ollamaUrl: required("OLLAMA_URL"),
     models: {
       llm: required("LLM_MODEL"),
+      llmByProvider,
       embedding: required("EMBEDDING_MODEL"),
       rerank: required("RERANK_MODEL"),
     },
