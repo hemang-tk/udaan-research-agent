@@ -307,9 +307,13 @@ class AnthropicLLMProvider:
             "model": self._model,
             "messages": anthropic_messages,
             "max_tokens": max_tokens or 4096,
-            "thinking": {"type": "adaptive"},
-            # ⚠️  NO temperature, NO top_p
+            # ⚠️  NO temperature, NO top_p (400 on Opus 4.x)
         }
+        # Adaptive thinking only where it's valid: Haiku 4.5 doesn't support it (400),
+        # and it cannot be combined with a forced tool_choice (400) — the json_schema
+        # path below forces a tool, so thinking is skipped there too.
+        if json_schema is None and "haiku" not in self._model.lower():
+            payload["thinking"] = {"type": "adaptive"}
         if system:
             payload["system"] = system
 
@@ -324,7 +328,7 @@ class AnthropicLLMProvider:
             ]
             payload["tool_choice"] = {"type": "tool", "name": "__json_output__"}
 
-        resp = httpx.post(
+        resp = _post_with_retry(
             self._API_URL,
             json=payload,
             headers={
@@ -333,7 +337,6 @@ class AnthropicLLMProvider:
             },
             timeout=120.0,
         )
-        resp.raise_for_status()
         content = resp.json().get("content", [])
 
         if json_schema is not None:
