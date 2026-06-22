@@ -75,6 +75,34 @@ export async function getResearch(id: string): Promise<ResearchBrief | null> {
   return data.result?.brief ?? null;
 }
 
+export interface ResearchDetail {
+  query: string;
+  createdAt?: string;
+  brief: ResearchBrief;
+  paywalled: PaywalledEntry[];
+}
+
+/** Full record for the detail page: the brief plus its query/date and any
+ *  paywalled sources. Works for both in-memory (just-run) and persisted jobs. */
+export async function getResearchRecord(id: string): Promise<ResearchDetail | null> {
+  const res = await fetch(`${API_BASE}/research/${id}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    query?: string;
+    createdAt?: string;
+    paywalled?: PaywalledEntry[];
+    result?: { brief?: ResearchBrief };
+  };
+  const brief = data.result?.brief;
+  if (!brief) return null;
+  return {
+    query: data.query ?? "",
+    createdAt: data.createdAt,
+    brief,
+    paywalled: data.paywalled ?? [],
+  };
+}
+
 export async function uploadPdf(input: {
   doi: string | null;
   internalId: string;

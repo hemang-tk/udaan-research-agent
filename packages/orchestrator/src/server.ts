@@ -18,6 +18,7 @@ import { createResearchStore, type ResearchStore } from "./researchStore.js";
 
 interface Job {
   projectId: string;
+  query: string;
   events: ProgressEvent[];
   paywalled: ResolutionManifestEntry[];
   result?: PipelineResult;
@@ -71,7 +72,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   function startJob(query: string, projectId: string, userId: string): string {
     const id = randomUUID();
-    const job: Job = { projectId, events: [], paywalled: [], done: false };
+    const job: Job = { projectId, query, events: [], paywalled: [], done: false };
     jobs.set(id, job);
 
     const config = loadConfig();
@@ -145,6 +146,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       return {
         done: job.done,
         projectId: job.projectId,
+        query: job.query,
         events: job.events,
         paywalled: job.paywalled,
         result: job.result,
