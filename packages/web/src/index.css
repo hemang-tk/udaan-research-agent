@@ -201,6 +201,18 @@ a:hover {
   overflow: hidden;
 }
 
+/* While a synthesis runs, lock the UI — nothing is clickable until it finishes. */
+.app--running button,
+.app--running .btn,
+.app--running .navlink,
+.app--running .detail__back,
+.app--running .section-head__link,
+.app--running .suggest-chip,
+.app--running a.card {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
 /* Pages that scroll as one column (Home, History). Centered, but the
    container itself spans full width so the canvas reads edge-to-edge. */
 .view {

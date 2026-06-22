@@ -4,6 +4,7 @@ import { Brief } from "../components/Brief.js";
 import { ChatPanel } from "../components/ChatPanel.js";
 import { PaywallUploads } from "../components/PaywallUploads.js";
 import { PipelineLedger } from "../components/PipelineLedger.js";
+import { useRunStatus } from "../RunStatusContext.js";
 import { getResearchState } from "../api.js";
 import type { PaywalledEntry, PhaseStatus, ResearchBrief } from "../types.js";
 
@@ -14,6 +15,7 @@ type Mode = "loading" | "running" | "ready" | "failed" | "notfound";
  *  becomes two panes: the brief on the left, a chat over its papers on the right. */
 export function ResearchDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { setRunning } = useRunStatus();
   const [mode, setMode] = useState<Mode>("loading");
   const [query, setQuery] = useState("");
   const [createdAt, setCreatedAt] = useState<string | undefined>();
@@ -74,6 +76,12 @@ export function ResearchDetailPage() {
       if (timer) clearTimeout(timer);
     };
   }, [id]);
+
+  // Disable the shell's nav/buttons while this run's pipeline is in progress.
+  useEffect(() => {
+    setRunning(mode === "running");
+    return () => setRunning(false);
+  }, [mode, setRunning]);
 
   const Bar = (
     <div className="detail__bar">
@@ -138,8 +146,8 @@ export function ResearchDetailPage() {
         <div className="view">
           <div className="view__inner view__inner--narrow">
             <p className="run__lead">
-              Searching the literature, reading the papers, and synthesizing a brief. You can leave —
-              this page resumes if you come back.
+              Searching the literature, reading the papers, and synthesizing a brief. This can take a
+              couple of minutes — the page resumes automatically if you reload.
             </p>
             <PipelineLedger statuses={statuses} details={details} />
           </div>

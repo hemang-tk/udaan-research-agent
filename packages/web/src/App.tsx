@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { Logo } from "./components/Logo.js";
+import { RunStatusProvider, useRunStatus } from "./RunStatusContext.js";
 import { NewResearchPage } from "./pages/NewResearchPage.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { ResearchDetailPage } from "./pages/ResearchDetailPage.js";
@@ -9,7 +10,18 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export function App() {
   return (
-    <div className="app">
+    <RunStatusProvider>
+      <AppShell />
+    </RunStatusProvider>
+  );
+}
+
+function AppShell() {
+  // While a synthesis runs, add `app--running` so the shell disables nav + buttons
+  // (CSS) — nothing should be clickable until the pipeline finishes.
+  const { running } = useRunStatus();
+  return (
+    <div className={`app${running ? " app--running" : ""}`}>
       <header className="topbar">
         <NavLink to="/" className="topbar__brand" aria-label="Udaan home">
           <Logo size={28} />

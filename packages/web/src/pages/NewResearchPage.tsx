@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { QueryConsole } from "../components/QueryConsole.js";
 import { ResearchCard } from "../components/ResearchCard.js";
+import { useRunStatus } from "../RunStatusContext.js";
 import { getHistory, startResearch } from "../api.js";
 import type { ResearchSummary } from "../types.js";
 
@@ -12,10 +13,18 @@ const ENGINE_DOWN = "Can't reach the research engine right now. Please try again
  *  Recent runs are shown below so the screen is never empty. */
 export function NewResearchPage() {
   const navigate = useNavigate();
+  const { setRunning } = useRunStatus();
   const [query, setQuery] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<ResearchSummary[]>([]);
+
+  // Submitting kicks off a synthesis — flag it so the shell disables everything
+  // until the run's page takes over (and clear it on unmount).
+  useEffect(() => {
+    setRunning(starting);
+  }, [starting, setRunning]);
+  useEffect(() => () => setRunning(false), [setRunning]);
 
   useEffect(() => {
     let alive = true;
