@@ -29,7 +29,7 @@ export class CrossrefAdapter implements OpenGraphProvider {
 
   constructor(
     private readonly baseUrl = "https://api.crossref.org",
-    private readonly rows = 100,
+    private readonly rows = 50,
   ) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {

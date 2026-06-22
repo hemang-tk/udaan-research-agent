@@ -35,6 +35,8 @@ export interface PipelineDeps {
   parsing: ParsingService;
   synthesis: SynthesisService;
   fetchImpl?: FetchLike;
+  /** Per-provider hard timeout (ms) for the Phase 2 fan-out; undefined = adapter default. */
+  gatewayTimeoutMs?: number;
   onProgress?: (event: ProgressEvent) => void;
   /** Called after Phase 4 with papers that could not be resolved (paywalled). */
   onPaywalled?: (entries: ResolutionManifestEntry[]) => void;
@@ -78,7 +80,10 @@ export async function runPipeline(
 
   // Phase 2 — Open Graph Gateway
   emit(2, "Open Graph Gateway", "start");
-  const { candidates } = await runGateway(manifest, { adapters: deps.adapters });
+  const { candidates } = await runGateway(manifest, {
+    adapters: deps.adapters,
+    timeoutMs: deps.gatewayTimeoutMs,
+  });
   emit(2, "Open Graph Gateway", "done", `${candidates.length} candidates`);
 
   // Phase 3 — Cross-Encoder Re-Ranking (service)

@@ -31,6 +31,10 @@ export interface Config {
   models: { llm: string; embedding: string; rerank: string };
   apiKeys: { gemini?: string; groq?: string; anthropic?: string; cohere?: string };
   services: { ranking: string; parsing: string; synthesis: string };
+  /** Per-provider hard timeout (ms) for the Phase 2 academic-graph fan-out.
+   *  The 4s default suits a datacenter; raise it (GATEWAY_TIMEOUT_MS) on a slow
+   *  residential link, where a single large result page can take longer. */
+  gatewayTimeoutMs: number;
 }
 
 function required(name: string): string {
@@ -44,6 +48,14 @@ function required(name: string): string {
 function optional(name: string): string | undefined {
   const value = process.env[name];
   return value === "" ? undefined : value;
+}
+
+/** Parse a positive-integer env var, falling back to `fallback` when unset/invalid. */
+function optionalNumber(name: string, fallback: number): number {
+  const value = optional(name);
+  if (value === undefined) return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 const LLM_PROVIDERS = ["ollama", "gemini", "groq", "anthropic"] as const;
@@ -90,5 +102,6 @@ export function loadConfig(): Config {
       parsing: required("PARSING_SERVICE_URL"),
       synthesis: required("SYNTHESIS_SERVICE_URL"),
     },
+    gatewayTimeoutMs: optionalNumber("GATEWAY_TIMEOUT_MS", 4000),
   };
 }

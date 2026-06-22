@@ -26,6 +26,7 @@ export function buildPipelineDeps(config: Config, hooks: BuildDepsHooks = {}): P
     parsing: new HttpParsingService(config.services.parsing),
     synthesis: new HttpSynthesisService(config.services.synthesis),
     store: new S3ObjectStore(config.s3),
+    gatewayTimeoutMs: config.gatewayTimeoutMs,
     onProgress: hooks.onProgress,
     onPaywalled: hooks.onPaywalled,
   };

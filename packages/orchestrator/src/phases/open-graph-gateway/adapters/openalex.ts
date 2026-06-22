@@ -21,7 +21,9 @@ export class OpenAlexAdapter implements OpenGraphProvider {
 
   constructor(
     private readonly baseUrl = "https://api.openalex.org",
-    private readonly perPage = 200,
+    // 50 (not 200) keeps the response ~1MB so it downloads well under the
+    // per-provider timeout on a slow link; re-ranking only needs the top slice.
+    private readonly perPage = 50,
   ) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {
