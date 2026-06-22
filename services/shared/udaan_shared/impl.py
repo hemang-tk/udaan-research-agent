@@ -203,12 +203,19 @@ class MultiLLMProvider:
     only stalls if EVERY provider is rate-limited at once. Each provider keeps its
     own internal retry; this adds the cross-provider failover."""
 
-    def __init__(self, providers: list, names: list[str] | None = None) -> None:
+    def __init__(
+        self, providers: list, names: list[str] | None = None, *, round_robin: bool = True
+    ) -> None:
         if not providers:
             raise ValueError("MultiLLMProvider needs at least one provider")
         self._providers = providers
         self._names = names or [type(p).__name__ for p in providers]
         self._next = 0
+        # round_robin=True spreads load across free tiers (the token-heavy run).
+        # round_robin=False is strict priority: always try providers[0] first and
+        # only fail over on error — used for chat, where we want the free provider
+        # (Groq) first and the paid one (Anthropic) purely as a backstop.
+        self._round_robin = round_robin
 
     def complete(
         self,
@@ -220,7 +227,8 @@ class MultiLLMProvider:
     ) -> str:
         n = len(self._providers)
         start = self._next
-        self._next = (self._next + 1) % n  # round-robin the starting provider
+        if self._round_robin:
+            self._next = (self._next + 1) % n  # round-robin the starting provider
         last_error: Exception | None = None
         for i in range(n):
             idx = (start + i) % n
@@ -362,10 +370,13 @@ class CohereEmbeddingProvider:
             )
         self._model = "embed-english-v3.0"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], input_type: str = "search_document") -> list[list[float]]:
+        # Stored documents (chunks/claims) use "search_document"; a retrieval query
+        # uses "search_query" — Cohere v3 embeds the two asymmetrically for better
+        # query/document matching.
         resp = httpx.post(
             "https://api.cohere.ai/v1/embed",
-            json={"texts": texts, "model": self._model, "input_type": "search_document"},
+            json={"texts": texts, "model": self._model, "input_type": input_type},
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=60.0,
         )

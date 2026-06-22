@@ -1,4 +1,5 @@
 import type {
+  AskResponse,
   PaywalledEntry,
   PipelineResult,
   ProgressEvent,
@@ -101,6 +102,17 @@ export async function getResearchRecord(id: string): Promise<ResearchDetail | nu
     brief,
     paywalled: data.paywalled ?? [],
   };
+}
+
+/** Ask a question answered only from this research's papers (RAG). */
+export async function askResearch(id: string, question: string): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE}/research/${id}/ask`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  if (!res.ok) throw new Error(`Ask failed (${res.status})`);
+  return res.json();
 }
 
 export async function uploadPdf(input: {

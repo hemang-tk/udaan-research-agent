@@ -9,6 +9,7 @@ rather than accumulating duplicates."""
 
 from __future__ import annotations
 
+import math
 import uuid
 from typing import Protocol
 
@@ -17,6 +18,12 @@ from udaan_contracts import ValidatedClaim
 
 def _point_id(claim_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, claim_id))
+
+
+def _chunk_point_id(project_id: str, document_doi: str | None, index: int) -> str:
+    # Deterministic per (project, document, position) so a re-ingest overwrites the
+    # same points instead of accumulating duplicates.
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"chunk:{project_id}:{document_doi}:{index}"))
 
 
 class ClaimStore(Protocol):
@@ -143,3 +150,163 @@ class QdrantClaimStore:
         if points:
             self._ensure_collection(len(points[0].vector))
             self.client.upsert(collection_name=self.collection, points=points)
+
+
+# ---------------------------------------------------------------------------
+# Full-text chunk storage (RAG / "ask these papers"). Distinct from claims:
+# claims are extracted propositions; chunks are the raw passages, so a chat
+# question can be answered from anywhere in the paper, not only the headline
+# claims. Same Qdrant cluster, a separate collection.
+# ---------------------------------------------------------------------------
+
+
+class ChunkStore(Protocol):
+    def delete_document_chunks(self, project_id: str, document_doi: str | None) -> None: ...
+
+    def upsert_chunks(
+        self,
+        project_id: str,
+        document_doi: str | None,
+        chunks: list[dict],
+        vectors: list[list[float]],
+    ) -> None: ...
+
+    def search(self, project_id: str, query_vector: list[float], top_k: int = 6) -> list[dict]: ...
+
+
+class InMemoryChunkStore:
+    def __init__(self) -> None:
+        self._points: list[tuple[dict, list[float]]] = []
+
+    def delete_document_chunks(self, project_id: str, document_doi: str | None) -> None:
+        self._points = [
+            (p, v)
+            for (p, v) in self._points
+            if not (p["projectId"] == project_id and p["documentDoi"] == document_doi)
+        ]
+
+    def upsert_chunks(self, project_id, document_doi, chunks, vectors) -> None:
+        for chunk, vector in zip(chunks, vectors):
+            payload = {**chunk, "projectId": project_id, "documentDoi": document_doi}
+            self._points.append((payload, [float(x) for x in vector]))
+
+    def search(self, project_id, query_vector, top_k=6) -> list[dict]:
+        def cosine(a: list[float], b: list[float]) -> float:
+            dot = sum(x * y for x, y in zip(a, b))
+            na = math.sqrt(sum(x * x for x in a)) or 1.0
+            nb = math.sqrt(sum(y * y for y in b)) or 1.0
+            return dot / (na * nb)
+
+        scored = [
+            {**payload, "score": cosine(query_vector, vector)}
+            for (payload, vector) in self._points
+            if payload["projectId"] == project_id
+        ]
+        scored.sort(key=lambda d: d["score"], reverse=True)
+        return scored[:top_k]
+
+
+class QdrantChunkStore:
+    """Stores raw passages as points (collection ``chunks``), payload-indexed on
+    projectId / documentDoi so a chat query can vector-search one research's papers."""
+
+    def __init__(self, url: str, collection: str = "chunks", *, api_key: str | None = None) -> None:
+        from qdrant_client import QdrantClient
+
+        self.client = QdrantClient(url=url, api_key=api_key)
+        self.collection = collection
+        self._ready_dim: int | None = None
+
+    def _ensure_collection(self, dim: int) -> None:
+        from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+
+        if self._ready_dim == dim:
+            return
+        current: int | None = None
+        try:
+            current = self.client.get_collection(self.collection).config.params.vectors.size
+        except Exception:
+            current = None
+        if current != dim:
+            try:
+                self.client.delete_collection(self.collection)
+            except Exception:
+                pass
+            self.client.create_collection(
+                collection_name=self.collection,
+                vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+            )
+            for field in ("projectId", "documentDoi"):
+                try:
+                    self.client.create_payload_index(
+                        collection_name=self.collection,
+                        field_name=field,
+                        field_schema=PayloadSchemaType.KEYWORD,
+                    )
+                except Exception:
+                    pass
+        self._ready_dim = dim
+
+    def _document_filter(self, project_id: str, document_doi: str | None):
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            IsNullCondition,
+            MatchValue,
+            PayloadField,
+        )
+
+        must = [FieldCondition(key="projectId", match=MatchValue(value=project_id))]
+        if document_doi is None:
+            must.append(IsNullCondition(is_null=PayloadField(key="documentDoi")))
+        else:
+            must.append(FieldCondition(key="documentDoi", match=MatchValue(value=document_doi)))
+        return Filter(must=must)
+
+    def delete_document_chunks(self, project_id: str, document_doi: str | None) -> None:
+        from qdrant_client.models import FilterSelector
+
+        try:
+            self.client.delete(
+                collection_name=self.collection,
+                points_selector=FilterSelector(
+                    filter=self._document_filter(project_id, document_doi)
+                ),
+            )
+        except Exception:
+            pass
+
+    def upsert_chunks(self, project_id, document_doi, chunks, vectors) -> None:
+        from qdrant_client.models import PointStruct
+
+        points = []
+        for i, (chunk, vector) in enumerate(zip(chunks, vectors)):
+            if vector is None:
+                continue
+            payload = {**chunk, "projectId": project_id, "documentDoi": document_doi}
+            points.append(
+                PointStruct(
+                    id=_chunk_point_id(project_id, document_doi, i),
+                    vector=[float(x) for x in vector],
+                    payload=payload,
+                )
+            )
+        if points:
+            self._ensure_collection(len(points[0].vector))
+            self.client.upsert(collection_name=self.collection, points=points)
+
+    def search(self, project_id, query_vector, top_k=6) -> list[dict]:
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        flt = Filter(must=[FieldCondition(key="projectId", match=MatchValue(value=project_id))])
+        try:
+            hits = self.client.search(
+                collection_name=self.collection,
+                query_vector=[float(x) for x in query_vector],
+                query_filter=flt,
+                limit=top_k,
+                with_payload=True,
+            )
+        except Exception:
+            return []
+        return [{**(h.payload or {}), "score": h.score} for h in hits]

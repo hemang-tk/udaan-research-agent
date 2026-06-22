@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { PipelineLedger } from "../components/PipelineLedger.js";
 import { QueryConsole } from "../components/QueryConsole.js";
-import { startResearch, streamProgress } from "../api.js";
-import type { PhaseStatus } from "../types.js";
+import { ResearchCard } from "../components/ResearchCard.js";
+import { getHistory, startResearch, streamProgress } from "../api.js";
+import type { PhaseStatus, ResearchSummary } from "../types.js";
 
 type Mode = "idle" | "running" | "rejected" | "error";
 
 const ENGINE_DOWN = "Can't reach the research engine right now. Please try again in a moment.";
 
-/** The "ask a question + watch the pipeline" page. On success it navigates to the
- *  research's detail page (the result is persisted, so the detail page renders it). */
+/** Ask a question + watch the pipeline. On success it navigates to the research's
+ *  detail page (the result is persisted, so the detail page renders it). Recent
+ *  runs are shown below so the screen is never empty. */
 export function NewResearchPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -18,10 +21,20 @@ export function NewResearchPage() {
   const [statuses, setStatuses] = useState<Record<number, PhaseStatus>>({});
   const [details, setDetails] = useState<Record<number, string | undefined>>({});
   const [message, setMessage] = useState("");
+  const [recent, setRecent] = useState<ResearchSummary[]>([]);
   const unsub = useRef<(() => void) | null>(null);
 
-  // Close any open SSE stream if the user navigates away mid-run.
   useEffect(() => () => unsub.current?.(), []);
+
+  useEffect(() => {
+    let alive = true;
+    getHistory()
+      .then((r) => alive && setRecent(r.slice(0, 6)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const run = useCallback(async () => {
     if (query.trim().length < 8) return;
@@ -62,23 +75,48 @@ export function NewResearchPage() {
   const busy = mode === "running";
 
   return (
-    <main className="page page--new">
-      <section className="ask">
-        <h1 className="ask__headline">Every claim traces to a real passage.</h1>
-        <p className="ask__sub">
-          Ask a research question. Udaan searches the literature, reads the papers, and synthesizes a
-          brief — every sentence anchored to a source you can open and verify.
-        </p>
-        <QueryConsole value={query} onChange={setQuery} onSubmit={run} busy={busy} />
-      </section>
-
-      {mode === "running" && (
-        <section className="ask__progress">
-          <PipelineLedger statuses={statuses} details={details} />
+    <main className="view">
+      <div className="view__inner">
+        <section className="home__hero">
+          <span className="hero__eyebrow">✦ Every claim traces to a real passage</span>
+          <h1 className="hero__title">
+            Research, <em>synthesized</em> and sourced.
+          </h1>
+          <p className="hero__sub">
+            Ask a research question. Udaan searches the literature, reads the papers, and writes a
+            brief — every sentence anchored to a source you can open, verify, and chat with.
+          </p>
+          <div className="hero__console">
+            <QueryConsole value={query} onChange={setQuery} onSubmit={run} busy={busy} />
+          </div>
         </section>
-      )}
-      {mode === "rejected" && <p className="banner banner--warn">{message}</p>}
-      {mode === "error" && <p className="banner banner--error">{message}</p>}
+
+        {mode === "running" && (
+          <section className="home__progress">
+            <PipelineLedger statuses={statuses} details={details} />
+          </section>
+        )}
+        {mode === "rejected" && <p className="banner banner--warn">{message}</p>}
+        {mode === "error" && <p className="banner banner--error">{message}</p>}
+
+        {!busy && recent.length > 0 && (
+          <section className="home__recent">
+            <div className="section-head">
+              <h2 className="section-head__title">Recent research</h2>
+              <Link to="/history" className="section-head__link">
+                View all →
+              </Link>
+            </div>
+            <ul className="cards">
+              {recent.map((r) => (
+                <li key={r.id}>
+                  <ResearchCard research={r} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     </main>
   );
 }
