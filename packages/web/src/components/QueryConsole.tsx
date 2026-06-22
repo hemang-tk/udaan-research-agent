@@ -4,7 +4,8 @@ interface QueryConsoleProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  onSample: () => void;
+  /** Optional secondary action (e.g. a sample). Omitted = no secondary button. */
+  onSample?: () => void;
   busy: boolean;
 }
 
@@ -64,9 +65,11 @@ export function QueryConsole({ value, onChange, onSubmit, onSample, busy }: Quer
       <div className="console__row">
         <span className="console__hint">⌘/Ctrl + Enter to run</span>
         <div className="console__actions">
-          <button type="button" className="btn btn--ghost" onClick={onSample} disabled={busy}>
-            See a sample brief
-          </button>
+          {onSample && (
+            <button type="button" className="btn btn--ghost" onClick={onSample} disabled={busy}>
+              See a sample brief
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--accent"
