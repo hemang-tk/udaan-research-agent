@@ -197,6 +197,42 @@ class GeminiLLMProvider:
         )
 
 
+class MultiLLMProvider:
+    """Round-robin across several LLM providers, failing over on error. Independent
+    free tiers (e.g. Gemini + Groq) share the per-chunk extraction load, so a run
+    only stalls if EVERY provider is rate-limited at once. Each provider keeps its
+    own internal retry; this adds the cross-provider failover."""
+
+    def __init__(self, providers: list, names: list[str] | None = None) -> None:
+        if not providers:
+            raise ValueError("MultiLLMProvider needs at least one provider")
+        self._providers = providers
+        self._names = names or [type(p).__name__ for p in providers]
+        self._next = 0
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        system: str | None = None,
+        json_schema: dict | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        n = len(self._providers)
+        start = self._next
+        self._next = (self._next + 1) % n  # round-robin the starting provider
+        last_error: Exception | None = None
+        for i in range(n):
+            idx = (start + i) % n
+            try:
+                return self._providers[idx].complete(
+                    messages, system=system, json_schema=json_schema, max_tokens=max_tokens
+                )
+            except Exception as err:  # noqa: BLE001 — failover to the next provider
+                last_error = err
+        raise RuntimeError(f"All LLM providers failed ({', '.join(self._names)}): {last_error}")
+
+
 class GroqLLMProvider:
     """Groq OpenAI-compatible /chat/completions. JSON mode via response_format."""
 
