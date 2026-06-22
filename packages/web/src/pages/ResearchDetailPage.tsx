@@ -3,88 +3,187 @@ import { Link, useParams } from "react-router-dom";
 import { Brief } from "../components/Brief.js";
 import { ChatPanel } from "../components/ChatPanel.js";
 import { PaywallUploads } from "../components/PaywallUploads.js";
-import { getResearchRecord, type ResearchDetail } from "../api.js";
+import { PipelineLedger } from "../components/PipelineLedger.js";
+import { getResearchState } from "../api.js";
+import type { PaywalledEntry, PhaseStatus, ResearchBrief } from "../types.js";
 
-type Load = "loading" | "notfound" | "ok";
+type Mode = "loading" | "running" | "ready" | "failed" | "notfound";
 
-/** One research, two panes: the brief (left) and a chat over its papers (right).
- *  The URL (/research/:id) is shareable. */
+/** One research. While it runs, this page shows the live pipeline and keeps
+ *  polling — so a reload mid-run resumes instead of losing the work. When done it
+ *  becomes two panes: the brief on the left, a chat over its papers on the right. */
 export function ResearchDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [state, setState] = useState<Load>("loading");
-  const [rec, setRec] = useState<ResearchDetail | null>(null);
+  const [mode, setMode] = useState<Mode>("loading");
+  const [query, setQuery] = useState("");
+  const [createdAt, setCreatedAt] = useState<string | undefined>();
+  const [brief, setBrief] = useState<ResearchBrief | null>(null);
+  const [paywalled, setPaywalled] = useState<PaywalledEntry[]>([]);
+  const [statuses, setStatuses] = useState<Record<number, PhaseStatus>>({});
+  const [details, setDetails] = useState<Record<number, string | undefined>>({});
+  const [message, setMessage] = useState("");
+  const [showPaywall, setShowPaywall] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    setState("loading");
-    setRec(null);
-    getResearchRecord(id ?? "")
-      .then((r) => {
-        if (!alive) return;
-        if (r) {
-          setRec(r);
-          setState("ok");
-        } else {
-          setState("notfound");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setMode("loading");
+    setBrief(null);
+
+    const tick = async () => {
+      const s = await getResearchState(id ?? "").catch(() => null);
+      if (!alive) return;
+      if (!s) {
+        setMode("notfound");
+        return;
+      }
+      setQuery(s.query);
+      setCreatedAt(s.createdAt);
+      setPaywalled(s.paywalled);
+
+      if (!s.done) {
+        const st: Record<number, PhaseStatus> = {};
+        const dt: Record<number, string | undefined> = {};
+        for (const e of s.events) {
+          st[e.phase] = e.status === "done" ? "done" : "active";
+          if (e.detail) dt[e.phase] = e.detail;
         }
-      })
-      .catch(() => alive && setState("notfound"));
+        setStatuses(st);
+        setDetails(dt);
+        setMode("running");
+        timer = setTimeout(tick, 2000);
+        return;
+      }
+
+      const r = s.result;
+      if (r && "status" in r && r.status === "ok") {
+        setBrief(r.brief);
+        setMode("ready");
+      } else if (r && "status" in r && r.status === "rejected") {
+        setMessage(`Query rejected (${r.reason}). Try rephrasing it as a research question.`);
+        setMode("failed");
+      } else {
+        setMessage((r && "error" in r ? r.error : s.error) || "The run did not complete.");
+        setMode("failed");
+      }
+    };
+
+    tick();
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, [id]);
 
-  if (state === "loading") {
-    return (
-      <main className="view">
-        <div className="view__inner">
-          <Link to="/history" className="detail__back">← History</Link>
-          <p className="muted" style={{ marginTop: 24 }}>Loading…</p>
+  const Bar = (
+    <div className="detail__bar">
+      <Link to="/history" className="detail__back">
+        ← History
+      </Link>
+      <div className="detail__heading">
+        <h1 className="detail__q" title={query}>
+          {query || "Research"}
+        </h1>
+        {mode === "running" && <span className="detail__date">Running…</span>}
+        {mode === "ready" && createdAt && (
+          <span className="detail__date">{new Date(createdAt).toLocaleString()}</span>
+        )}
+      </div>
+      {mode === "ready" && brief && (
+        <div className="detail__pills">
+          <span className="chip chip--accent">{brief.metadata.totalClaims} claims</span>
+          <span className="chip">{brief.metadata.sectionsGenerated} sections</span>
         </div>
-      </main>
-    );
-  }
+      )}
+    </div>
+  );
 
-  if (state === "notfound" || !rec) {
+  if (mode === "loading") {
     return (
-      <main className="view">
-        <div className="view__inner">
-          <div className="empty">
-            <span className="empty__icon">🔎</span>
-            <p className="empty__lead">This research isn’t available</p>
-            <p className="muted">It may have run before persistence was enabled, or the link is wrong.</p>
-            <Link to="/history" className="btn btn--ghost">Back to History</Link>
+      <main className="detail">
+        {Bar}
+        <div className="view">
+          <div className="view__inner">
+            <p className="muted">Loading…</p>
           </div>
         </div>
       </main>
     );
   }
 
-  const meta = rec.brief.metadata;
+  if (mode === "notfound") {
+    return (
+      <main className="detail">
+        {Bar}
+        <div className="view">
+          <div className="view__inner">
+            <div className="empty">
+              <span className="empty__icon">🔎</span>
+              <p className="empty__lead">This research isn’t available</p>
+              <p className="muted">It may have run before persistence was enabled, or the link is wrong.</p>
+              <Link to="/history" className="btn btn--ghost">
+                Back to History
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
+  if (mode === "running") {
+    return (
+      <main className="detail">
+        {Bar}
+        <div className="view">
+          <div className="view__inner view__inner--narrow">
+            <p className="run__lead">
+              Searching the literature, reading the papers, and synthesizing a brief. You can leave —
+              this page resumes if you come back.
+            </p>
+            <PipelineLedger statuses={statuses} details={details} />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (mode === "failed") {
+    return (
+      <main className="detail">
+        {Bar}
+        <div className="view">
+          <div className="view__inner">
+            <p className="banner banner--warn">{message}</p>
+            <p style={{ marginTop: 16 }}>
+              <Link to="/" className="btn btn--accent">
+                Start a new research
+              </Link>
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // mode === "ready"
   return (
     <main className="detail">
-      <div className="detail__bar">
-        <Link to="/history" className="detail__back">← History</Link>
-        <div className="detail__heading">
-          <h1 className="detail__q" title={rec.query}>{rec.query || "Research brief"}</h1>
-          {rec.createdAt && (
-            <span className="detail__date">{new Date(rec.createdAt).toLocaleString()}</span>
-          )}
-        </div>
-        <div className="detail__pills">
-          <span className="chip chip--accent">{meta.totalClaims} claims</span>
-          <span className="chip">{meta.sectionsGenerated} sections</span>
-        </div>
-      </div>
-
+      {Bar}
       <div className="detail__panes">
         <div className="pane pane--brief">
-          {rec.paywalled.length > 0 && <PaywallUploads entries={rec.paywalled} />}
-          <Brief brief={rec.brief} />
+          {paywalled.length > 0 &&
+            (showPaywall ? (
+              <PaywallUploads entries={paywalled} onClose={() => setShowPaywall(false)} />
+            ) : (
+              <button type="button" className="paywall__reopen" onClick={() => setShowPaywall(true)}>
+                ⚠ Show paywalled sources ({paywalled.length})
+              </button>
+            ))}
+          {brief && <Brief brief={brief} />}
         </div>
         <div className="pane pane--chat">
-          <ChatPanel researchId={id ?? ""} query={rec.query} brief={rec.brief} />
+          <ChatPanel researchId={id ?? ""} query={query} brief={brief as ResearchBrief} />
         </div>
       </div>
     </main>

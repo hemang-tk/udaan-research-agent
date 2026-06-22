@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes } from "react-router-dom";
+import { Logo } from "./components/Logo.js";
 import { NewResearchPage } from "./pages/NewResearchPage.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { ResearchDetailPage } from "./pages/ResearchDetailPage.js";
@@ -11,7 +12,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <NavLink to="/" className="topbar__brand" aria-label="Udaan home">
-          <span className="topbar__mark">U</span>
+          <Logo size={28} />
           <span className="topbar__name">Udaan</span>
           <span className="topbar__tag">Research Synthesis</span>
         </NavLink>
