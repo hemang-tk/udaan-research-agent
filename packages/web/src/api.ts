@@ -76,6 +76,36 @@ export async function getResearch(id: string): Promise<ResearchBrief | null> {
   return data.result?.brief ?? null;
 }
 
+/** Full live state of a run — works for in-progress jobs (events, not yet done)
+ *  and finished/persisted ones (result.brief). Lets the detail page render a run
+ *  that is still going AND survive a page reload. */
+export interface ResearchState {
+  done: boolean;
+  projectId?: string;
+  query: string;
+  createdAt?: string;
+  events: ProgressEvent[];
+  paywalled: PaywalledEntry[];
+  result?: PipelineResult;
+  error?: string;
+}
+
+export async function getResearchState(id: string): Promise<ResearchState | null> {
+  const res = await fetch(`${API_BASE}/research/${id}`);
+  if (!res.ok) return null;
+  const d = (await res.json()) as Partial<ResearchState> & { done?: boolean };
+  return {
+    done: !!d.done,
+    projectId: d.projectId,
+    query: d.query ?? "",
+    createdAt: d.createdAt,
+    events: d.events ?? [],
+    paywalled: d.paywalled ?? [],
+    result: d.result,
+    error: d.error,
+  };
+}
+
 export interface ResearchDetail {
   query: string;
   createdAt?: string;

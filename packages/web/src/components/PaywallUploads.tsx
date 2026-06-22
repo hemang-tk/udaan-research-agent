@@ -16,7 +16,13 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function PaywallUploads({ entries }: { entries: PaywalledEntry[] }) {
+export function PaywallUploads({
+  entries,
+  onClose,
+}: {
+  entries: PaywalledEntry[];
+  onClose?: () => void;
+}) {
   const [states, setStates] = useState<Record<string, UploadState>>({});
 
   const handle = async (entry: PaywalledEntry, file: File | undefined) => {
@@ -33,6 +39,17 @@ export function PaywallUploads({ entries }: { entries: PaywalledEntry[] }) {
 
   return (
     <section className="paywall" aria-label="Paywalled sources">
+      {onClose && (
+        <button
+          type="button"
+          className="paywall__close"
+          onClick={onClose}
+          aria-label="Dismiss paywalled sources"
+          title="Dismiss"
+        >
+          ✕
+        </button>
+      )}
       <h2 className="paywall__title">Paywalled sources</h2>
       <p className="paywall__lead">
         {entries.length} paper{entries.length === 1 ? "" : "s"} couldn’t be retrieved openly. If you have

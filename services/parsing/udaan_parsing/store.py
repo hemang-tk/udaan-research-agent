@@ -300,13 +300,16 @@ class QdrantChunkStore:
 
         flt = Filter(must=[FieldCondition(key="projectId", match=MatchValue(value=project_id))])
         try:
-            hits = self.client.search(
+            # query_points (not the removed `search`) — qdrant-client >=1.12 dropped
+            # QdrantClient.search; query_points is the current vector-search API.
+            res = self.client.query_points(
                 collection_name=self.collection,
-                query_vector=[float(x) for x in query_vector],
+                query=[float(x) for x in query_vector],
                 query_filter=flt,
                 limit=top_k,
                 with_payload=True,
             )
         except Exception:
+            # Collection may not exist yet (a research run before chunk storage) — no passages.
             return []
-        return [{**(h.payload or {}), "score": h.score} for h in hits]
+        return [{**(p.payload or {}), "score": p.score} for p in res.points]

@@ -147,17 +147,10 @@ a:hover {
 .topbar__brand:hover {
   text-decoration: none;
 }
-.topbar__mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+.logo {
+  display: block;
+  flex: none;
   border-radius: 8px;
-  background: var(--grad-accent);
-  color: #042b20;
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: -0.03em;
   box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3), 0 4px 14px rgba(52, 211, 153, 0.25);
 }
 .topbar__name {
@@ -1276,12 +1269,59 @@ a:hover {
 
 /* ===================== Paywall ===================== */
 .paywall {
+  position: relative;
   margin-bottom: 22px;
   background: var(--card);
   border: 1px solid var(--line-800);
   border-left: 3px solid var(--warn);
   border-radius: var(--radius);
   padding: 18px 20px;
+}
+.paywall__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid var(--line-800);
+  background: transparent;
+  color: var(--t-500);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.paywall__close:hover {
+  color: var(--t-100);
+  border-color: var(--line-700);
+}
+.paywall__reopen {
+  margin-bottom: 22px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-dim);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: filter 0.15s var(--ease);
+}
+.paywall__reopen:hover {
+  filter: brightness(1.1);
+}
+
+/* Running-view (live pipeline on the research page) */
+.view__inner--narrow {
+  max-width: 720px;
+}
+.run__lead {
+  margin: 8px 0 20px;
+  color: var(--t-400);
+  font-size: 15px;
+  line-height: 1.6;
 }
 .paywall__title {
   font-size: 14px;
