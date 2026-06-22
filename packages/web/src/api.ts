@@ -1,4 +1,10 @@
-import type { PaywalledEntry, PipelineResult, ProgressEvent } from "./types.js";
+import type {
+  PaywalledEntry,
+  PipelineResult,
+  ProgressEvent,
+  ResearchBrief,
+  ResearchSummary,
+} from "./types.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -47,6 +53,26 @@ export async function getStatus(jobId: string): Promise<JobStatus> {
   const res = await fetch(`${API_BASE}/research/${jobId}`);
   if (!res.ok) throw new Error(`Status ${res.status}`);
   return res.json();
+}
+
+/** Past research sessions, most recent first. Empty if persistence is off/unreachable. */
+export async function getHistory(): Promise<ResearchSummary[]> {
+  try {
+    const res = await fetch(`${API_BASE}/history`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { researches?: ResearchSummary[] };
+    return data.researches ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Load a past research's brief by id (from the History store). */
+export async function getResearch(id: string): Promise<ResearchBrief | null> {
+  const res = await fetch(`${API_BASE}/research/${id}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { result?: { brief?: ResearchBrief } };
+  return data.result?.brief ?? null;
 }
 
 export async function uploadPdf(input: {

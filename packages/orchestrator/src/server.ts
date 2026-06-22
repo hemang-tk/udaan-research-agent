@@ -13,6 +13,7 @@ import { loadConfig } from "@udaan/shared";
 import { S3ObjectStore, storageKey, type ObjectStore } from "./phases/full-text-resolution/index.js";
 import { buildPipelineDeps } from "./pipeline/index.js";
 import { runPipeline, type PipelineResult, type ProgressEvent } from "./pipeline/runPipeline.js";
+import { createResearchStore, type ResearchStore } from "./researchStore.js";
 
 interface Job {
   projectId: string;
@@ -43,6 +44,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     return store;
   };
 
+  // Research-session persistence (History). Read DATABASE_URL directly (not via
+  // loadConfig) so buildServer needs no infra env in tests; unset = no-op store.
+  let researchStore: ResearchStore | null = null;
+  const getResearchStore = (): ResearchStore => {
+    if (!researchStore) researchStore = createResearchStore(process.env.DATABASE_URL || undefined);
+    return researchStore;
+  };
+
   function startJob(query: string, projectId: string, userId: string): string {
     const id = randomUUID();
     const job: Job = { projectId, events: [], paywalled: [], done: false };
@@ -60,6 +69,13 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     runPipeline(request, deps)
       .then((result) => {
         job.result = result;
+        // Persist completed briefs so they survive restarts and list in History.
+        // Best-effort: a persistence failure must not affect the live result.
+        if (result.status === "ok") {
+          getResearchStore()
+            .save({ id, query, projectId, brief: result.brief })
+            .catch(() => undefined);
+        }
       })
       .catch((err: unknown) => {
         job.error = err instanceof Error ? err.message : String(err);
@@ -72,6 +88,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   }
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  // History: past research sessions (most recent first).
+  app.get("/history", async () => {
+    try {
+      return { researches: await getResearchStore().list() };
+    } catch {
+      return { researches: [] };
+    }
+  });
 
   // Runtime request-body validation at the API boundary (issue #20). Fastify
   // rejects a body that violates the schema with a descriptive 400 before the
@@ -99,14 +124,29 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   app.get<{ Params: { id: string } }>("/research/:id", async (req, reply) => {
     const job = jobs.get(req.params.id);
-    if (!job) return reply.code(404).send({ error: "not found" });
+    if (job) {
+      return {
+        done: job.done,
+        projectId: job.projectId,
+        events: job.events,
+        paywalled: job.paywalled,
+        result: job.result,
+        error: job.error,
+      };
+    }
+    // Not in memory — try the persisted History store (survives restarts).
+    const rec = await getResearchStore()
+      .get(req.params.id)
+      .catch(() => null);
+    if (!rec) return reply.code(404).send({ error: "not found" });
     return {
-      done: job.done,
-      projectId: job.projectId,
-      events: job.events,
-      paywalled: job.paywalled,
-      result: job.result,
-      error: job.error,
+      done: true,
+      projectId: rec.projectId,
+      query: rec.query,
+      createdAt: rec.createdAt,
+      events: [],
+      paywalled: [],
+      result: { status: "ok", brief: rec.brief },
     };
   });
 

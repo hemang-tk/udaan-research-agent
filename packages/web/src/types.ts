@@ -27,3 +27,12 @@ export type PipelineResult =
   | { error: string };
 
 export type PhaseStatus = "pending" | "active" | "done";
+
+/** A past research session, as listed in History. */
+export interface ResearchSummary {
+  id: string;
+  query: string;
+  createdAt: string;
+  totalClaims: number;
+  sections: number;
+}
