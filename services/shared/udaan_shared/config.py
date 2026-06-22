@@ -34,6 +34,7 @@ class S3Config:
 @dataclass(frozen=True)
 class Config:
     qdrant_url: str
+    qdrant_api_key: str | None
     redis_url: str
     s3: S3Config
     llm_provider: str
@@ -50,6 +51,8 @@ class Config:
 def load_config() -> Config:
     return Config(
         qdrant_url=_required("QDRANT_URL"),
+        # Qdrant Cloud requires an API key; a local/docker Qdrant does not (None).
+        qdrant_api_key=_optional("QDRANT_API_KEY"),
         redis_url=_required("REDIS_URL"),
         s3=S3Config(
             endpoint=_required("S3_ENDPOINT"),

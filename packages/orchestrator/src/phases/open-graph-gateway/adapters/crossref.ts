@@ -27,10 +27,7 @@ function formatDate(parts?: number[][]): string {
 export class CrossrefAdapter implements OpenGraphProvider {
   readonly name = "Crossref";
 
-  constructor(
-    private readonly baseUrl = "https://api.crossref.org",
-    private readonly rows = 50,
-  ) {}
+  constructor(private readonly baseUrl = "https://api.crossref.org", private readonly rows = 50) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {
     const query = manifest.searchContext.coreConcepts.join(" ") || manifest.searchContext.originalQuery;

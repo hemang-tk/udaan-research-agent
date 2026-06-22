@@ -37,7 +37,8 @@ const BASE_SYSTEM =
   "with its claim ID in square brackets), write a short synthesis. Rules: " +
   "(1) never add facts beyond the provided claims; (2) write atomic, independent " +
   "sentences; (3) every factual sentence MUST end with the relevant claim ID in " +
-  "square brackets exactly as given (e.g. [cl_abc]); (4) use only the claim IDs provided.";
+  "square brackets exactly as given (e.g. [cl_abc]); (4) use only the claim IDs provided; " +
+  "(5) write the entire brief in English, regardless of the language of the claims.";
 
 function clustersToContent(clusters: SynthesisCluster[]): string {
   return clusters

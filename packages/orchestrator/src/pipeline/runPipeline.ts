@@ -110,18 +110,35 @@ export async function runPipeline(
   // streams the PDF directly from MinIO/S3, so large PDFs are never buffered or
   // base64-inflated through the orchestrator (Phase 4's streaming intent).
   emit(5, "Ingestion & Parsing", "start");
+  // Cap how many resolved papers we ingest. Each paper is a long, sequential run
+  // of per-chunk LLM calls, so a large set is a slow, heavy job; MAX_INGEST_DOCS
+  // bounds that (0/unset = no cap). Top-ranked papers come first, so a small cap
+  // keeps the most relevant evidence.
+  const maxDocs = Number(process.env.MAX_INGEST_DOCS) || Infinity;
   let claimsExtracted = 0;
+  let ingestFailures = 0;
+  let ingestAttempted = 0;
   for (const entry of resolution.manifest) {
     if (entry.status !== "RESOLVED_CACHE" && entry.status !== "RESOLVED_DOWNLOAD") continue;
     if (!entry.storagePointer) continue;
-    const res = await deps.parsing.ingest({
-      projectId: request.projectId,
-      documentDoi: entry.doi,
-      storagePointer: entry.storagePointer,
-    });
-    claimsExtracted += res.claimsExtracted;
+    if (ingestAttempted >= maxDocs) break;
+    ingestAttempted += 1;
+    try {
+      const res = await deps.parsing.ingest({
+        projectId: request.projectId,
+        documentDoi: entry.doi,
+        storagePointer: entry.storagePointer,
+      });
+      claimsExtracted += res.claimsExtracted;
+    } catch {
+      // One document failing (a flaky parse, a transient LLM/service drop) must not
+      // sink the whole brief — skip it and press on with the rest.
+      ingestFailures += 1;
+    }
   }
-  emit(5, "Ingestion & Parsing", "done", `${claimsExtracted} claims`);
+  const ingestDetail =
+    ingestFailures > 0 ? `${claimsExtracted} claims (${ingestFailures} skipped)` : `${claimsExtracted} claims`;
+  emit(5, "Ingestion & Parsing", "done", ingestDetail);
 
   // Phase 6 — Cross-Source Synthesis & Polarity (service)
   emit(6, "Synthesis & Polarity", "start");

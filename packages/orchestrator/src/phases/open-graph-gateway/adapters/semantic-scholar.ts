@@ -19,10 +19,7 @@ interface S2Paper {
 export class SemanticScholarAdapter implements OpenGraphProvider {
   readonly name = "SemanticScholar";
 
-  constructor(
-    private readonly baseUrl = "https://api.semanticscholar.org/graph/v1",
-    private readonly limit = 50,
-  ) {}
+  constructor(private readonly baseUrl = "https://api.semanticscholar.org/graph/v1", private readonly limit = 50) {}
 
   async search(manifest: CompiledDiscoveryManifest, signal?: AbortSignal): Promise<CandidatePaper[]> {
     const payload = manifest.compilations.semanticScholarPayload as { query?: string } | undefined;

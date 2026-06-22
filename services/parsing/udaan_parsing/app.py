@@ -13,7 +13,7 @@ from udaan_shared import create_embedding_provider, create_llm_provider, load_co
 from .embeddings import register_sentence_transformers
 from .ingest import ingest_from_pointer
 from .objstore import InMemoryObjectStore, ObjectStore, S3ObjectStore
-from .parser import parse_pdf, parser_quality
+from .parser import parser_quality, select_parser
 from .store import ClaimStore, InMemoryClaimStore, QdrantClaimStore
 
 register_defaults()
@@ -37,7 +37,7 @@ def _deps():
         _llm = create_llm_provider(cfg)
         _embed = create_embedding_provider(cfg)
         try:
-            _store = QdrantClaimStore(cfg.qdrant_url)
+            _store = QdrantClaimStore(cfg.qdrant_url, api_key=cfg.qdrant_api_key)
         except Exception:
             _store = InMemoryClaimStore()
         try:
@@ -91,7 +91,7 @@ def ingest(req: IngestRequest) -> dict:
         req.document_doi,
         req.project_id,
         object_store=objstore,
-        parse=parse_pdf,
+        parse=select_parser(),
         llm=llm,
         embed=embed,
         store=store,
