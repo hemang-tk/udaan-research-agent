@@ -1,8 +1,7 @@
 /**
  * Thin HTTP API for the orchestrator. Runs the pipeline in-process and streams
  * per-phase progress over SSE. Paywalled papers are surfaced for manual upload
- * to the vault (so a re-run resolves them from cache). (BullMQ is the
- * horizontal-scale path: runPipeline is the worker body.)
+ * to the vault (so a re-run resolves them from cache).
  */
 
 import { randomUUID } from "node:crypto";

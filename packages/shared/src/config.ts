@@ -3,9 +3,9 @@
  * environment — no hardcoded `localhost` in code, so deploy is a config change.
  */
 
-export type LLMProviderName = "ollama" | "gemini" | "groq" | "anthropic";
-export type EmbeddingProviderName = "local" | "cohere";
-export type RerankProviderName = "local" | "cohere";
+export type LLMProviderName = "gemini" | "groq" | "anthropic";
+export type EmbeddingProviderName = "cohere";
+export type RerankProviderName = "cohere";
 
 export interface S3Config {
   endpoint: string;
@@ -17,7 +17,6 @@ export interface S3Config {
 
 export interface Config {
   qdrantUrl: string;
-  redisUrl: string;
   /** Postgres connection string for research-session persistence (History).
    *  Optional: when unset, persistence is disabled and runs stay ephemeral. */
   databaseUrl?: string;
@@ -32,7 +31,6 @@ export interface Config {
     embedding: EmbeddingProviderName;
     rerank: RerankProviderName;
   };
-  ollamaUrl: string;
   models: {
     llm: string;
     /** Optional per-provider model override (LLM_MODEL_GROQ, LLM_MODEL_GEMINI, …)
@@ -70,9 +68,9 @@ function optionalNumber(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-const LLM_PROVIDERS = ["ollama", "gemini", "groq", "anthropic"] as const;
-const EMBEDDING_PROVIDERS = ["local", "cohere"] as const;
-const RERANK_PROVIDERS = ["local", "cohere"] as const;
+const LLM_PROVIDERS = ["gemini", "groq", "anthropic"] as const;
+const EMBEDDING_PROVIDERS = ["cohere"] as const;
+const RERANK_PROVIDERS = ["cohere"] as const;
 
 /** Validate an env value against an allowed set instead of blind-casting. */
 function parseEnum<T extends string>(name: string, value: string, allowed: readonly T[]): T {
@@ -88,7 +86,7 @@ function parseEnumList<T extends string>(name: string, value: string, allowed: r
 }
 
 export function loadConfig(): Config {
-  const llmList = parseEnumList("LLM_PROVIDER", optional("LLM_PROVIDER") ?? "ollama", LLM_PROVIDERS);
+  const llmList = parseEnumList("LLM_PROVIDER", optional("LLM_PROVIDER") ?? "anthropic", LLM_PROVIDERS);
   const llmByProvider: Partial<Record<LLMProviderName, string>> = {};
   for (const p of LLM_PROVIDERS) {
     const m = optional(`LLM_MODEL_${p.toUpperCase()}`);
@@ -96,7 +94,6 @@ export function loadConfig(): Config {
   }
   return {
     qdrantUrl: required("QDRANT_URL"),
-    redisUrl: required("REDIS_URL"),
     databaseUrl: optional("DATABASE_URL"),
     s3: {
       endpoint: required("S3_ENDPOINT"),
@@ -108,10 +105,9 @@ export function loadConfig(): Config {
     providers: {
       llm: llmList[0]!, // parseEnumList guarantees at least one
       llmList,
-      embedding: parseEnum("EMBEDDING_PROVIDER", optional("EMBEDDING_PROVIDER") ?? "local", EMBEDDING_PROVIDERS),
-      rerank: parseEnum("RERANK_PROVIDER", optional("RERANK_PROVIDER") ?? "local", RERANK_PROVIDERS),
+      embedding: parseEnum("EMBEDDING_PROVIDER", optional("EMBEDDING_PROVIDER") ?? "cohere", EMBEDDING_PROVIDERS),
+      rerank: parseEnum("RERANK_PROVIDER", optional("RERANK_PROVIDER") ?? "cohere", RERANK_PROVIDERS),
     },
-    ollamaUrl: required("OLLAMA_URL"),
     models: {
       llm: required("LLM_MODEL"),
       llmByProvider,

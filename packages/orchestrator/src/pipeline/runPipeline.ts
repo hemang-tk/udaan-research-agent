@@ -2,7 +2,7 @@
  * End-to-end pipeline driver: chains Phases 1-7 for one research query.
  * In-proc TS phases (1, 2, 4, 7) run directly; Python phases (3, 5, 6) go over
  * HTTP via injected service clients. Progress is emitted per phase so an API
- * can stream it (SSE). This same function is the body of the BullMQ worker.
+ * can stream it (SSE).
  */
 
 import type { ResearchBrief, ResolutionManifestEntry } from "@udaan/contracts";

@@ -1,5 +1,12 @@
 # Deploy (free / no credit card)
 
+> **`main` is the hosted-only build** (Hugging Face + external APIs): LLM via
+> Groq/Gemini/Anthropic, embeddings + rerank via **Cohere**, parsing via
+> **LlamaParse**, plus Qdrant Cloud / Supabase S3 / Neon Postgres. There are no
+> local models, Ollama, Redis, or MinIO. The full self-hosted stack (own models +
+> local infra, docker-compose) lives on the **`local-infra`** branch. The notes
+> below describe running this hosted build from your laptop behind a free tunnel.
+
 This setup costs nothing and needs no cloud account or card:
 
 - **Frontend** → Netlify (static; see `netlify.toml`)
@@ -29,10 +36,17 @@ cp infra/.env.example infra/.env
 Edit `infra/.env`:
 
 ```ini
-# Use the free hosted LLM instead of local Ollama (no GPU needed)
+# Free hosted LLM (no GPU needed)
 LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_your_key_here
-LLM_MODEL=llama-3.3-70b-versatile     # a valid Groq model id (not the Ollama one)
+LLM_MODEL=llama-3.3-70b-versatile     # a valid Groq model id
+
+# Embeddings + rerank via Cohere (free tier); parsing via LlamaParse (free tier)
+EMBEDDING_PROVIDER=cohere
+RERANK_PROVIDER=cohere
+COHERE_API_KEY=your_cohere_key
+PARSER=llamaparse
+LLAMAPARSE_API_KEY=llx_your_key
 
 # Allow your Netlify site to call the API from the browser
 CORS_ORIGINS=https://your-site.netlify.app
@@ -41,13 +55,9 @@ CORS_ORIGINS=https://your-site.netlify.app
 PORT=8080
 ```
 
-Embedding/rerank can stay on the dependency-light fallback (`EMBEDDING_PROVIDER=local`,
-`RERANK_PROVIDER=local`) for a no-cost run — quality is degraded and the brief says so.
-
 ## 3. Start the backend
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # Qdrant, Redis, MinIO
 ./run.sh                                           # the 3 services + orchestrator API
 ```
 
@@ -157,8 +167,8 @@ MAX_CHUNKS_PER_DOC=12
 GATEWAY_TIMEOUT_MS=25000        # 4s default starves Phase 2 on a slow link (0 candidates)
 ```
 
-`start.sh` defaults `RANKING/PARSING/SYNTHESIS_SERVICE_URL` to localhost and
-fills the unused-but-required `REDIS_URL`/`OLLAMA_URL`, so you don't set those.
+`start.sh` defaults `RANKING/PARSING/SYNTHESIS_SERVICE_URL` to localhost, so you
+don't set those.
 
 ### 4. Point the frontend at the Space
 
@@ -184,7 +194,7 @@ degraded fallbacks), since every stage now runs a real hosted implementation.
 - **ngrok free interstitial**: the frontend already sends `ngrok-skip-browser-warning`
   on `fetch`. The SSE `EventSource` can't send headers but uses `Accept: text/event-stream`,
   which normally passes — if the stream gets blocked, use `cloudflared` instead.
-- **Groq model id**: when `LLM_PROVIDER=groq`, `LLM_MODEL` must be a Groq model
-  (e.g. `llama-3.3-70b-versatile`), not the Ollama `qwen2.5:...` id.
+- **Groq model id**: when `LLM_PROVIDER=groq`, `LLM_MODEL` must be a valid Groq
+  model id (e.g. `llama-3.3-70b-versatile`).
 - **Moving off the laptop later** (still no card): a Hugging Face Docker Space can host
   the same backend (16 GB RAM, no card, no request timeout — works with SSE).

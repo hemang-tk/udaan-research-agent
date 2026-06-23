@@ -1,6 +1,6 @@
 /**
  * Outbound-call resilience (issue #21): a single `resilientFetch` used by the
- * service clients, the Ollama provider, and the Phase 2 adapters.
+ * service clients, the LLM providers, and the Phase 2 adapters.
  *
  * It adds, around the bare `fetch` these paths used to call once:
  *   - a per-attempt timeout (AbortController) so a hung dependency is abandoned;

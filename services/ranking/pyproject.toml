@@ -11,25 +11,14 @@ dependencies = [
   "udaan-shared",
 ]
 
-# Heavy ML stack is OPTIONAL. Without it the service runs the deterministic
-# lexical fallback; install to enable the GPU cross-encoder:
-#   uv sync --extra ml
-[project.optional-dependencies]
-ml = ["sentence-transformers>=3.0", "torch>=2.2"]
-
+# Hosted-only build: reranking is the Cohere rerank API (stdlib HTTP), so the
+# service needs no ML stack. Just `uv sync`.
 [dependency-groups]
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [tool.uv.sources]
 udaan-contracts = { path = "../../packages/contracts/python", editable = true }
 udaan-shared = { path = "../shared", editable = true }
-# CUDA build so the cross-encoder reranker runs on the GPU (see parsing pyproject).
-torch = { index = "pytorch-cu128" }
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
 
 [build-system]
 requires = ["hatchling"]

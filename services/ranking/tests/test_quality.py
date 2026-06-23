@@ -1,16 +1,10 @@
-"""Phase 3 degraded-mode reporting (issue #17): the lexical fallback reranker is
-flagged degraded; the real cross-encoder / Cohere rerankers are not."""
+"""Phase 3 quality reporting (issue #17): the hosted Cohere reranker is a real
+(non-degraded) cross-encoder-class reranker."""
 
-from udaan_ranking.reranker import CohereReranker, CrossEncoderReranker, LexicalReranker
-
-
-def test_lexical_reranker_is_degraded():
-    assert LexicalReranker.degraded is True
-    assert LexicalReranker.implementation == "lexical"
+from udaan_ranking.reranker import CohereReranker
 
 
-def test_real_rerankers_are_not_degraded():
-    assert CrossEncoderReranker.degraded is False
-    assert CrossEncoderReranker.implementation == "cross-encoder"
+def test_cohere_reranker_is_not_degraded():
     assert CohereReranker.degraded is False
     assert CohereReranker.implementation == "cohere"
+    assert CohereReranker.method == "CROSS_ENCODER"

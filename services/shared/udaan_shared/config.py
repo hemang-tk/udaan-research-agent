@@ -35,12 +35,10 @@ class S3Config:
 class Config:
     qdrant_url: str
     qdrant_api_key: str | None
-    redis_url: str
     s3: S3Config
     llm_provider: str
     embedding_provider: str
     rerank_provider: str
-    ollama_url: str
     llm_model: str
     # Per-provider model overrides (LLM_MODEL_GROQ, LLM_MODEL_GEMINI, …) used when
     # LLM_PROVIDER lists several providers (round-robin) that need different ids.
@@ -54,9 +52,8 @@ class Config:
 def load_config() -> Config:
     return Config(
         qdrant_url=_required("QDRANT_URL"),
-        # Qdrant Cloud requires an API key; a local/docker Qdrant does not (None).
+        # Qdrant Cloud requires an API key.
         qdrant_api_key=_optional("QDRANT_API_KEY"),
-        redis_url=_required("REDIS_URL"),
         s3=S3Config(
             endpoint=_required("S3_ENDPOINT"),
             bucket=_required("S3_BUCKET"),
@@ -64,14 +61,13 @@ def load_config() -> Config:
             secret_key=_required("S3_SECRET_KEY"),
             region=_optional("S3_REGION", "us-east-1") or "us-east-1",
         ),
-        llm_provider=_optional("LLM_PROVIDER", "ollama") or "ollama",
-        embedding_provider=_optional("EMBEDDING_PROVIDER", "local") or "local",
-        rerank_provider=_optional("RERANK_PROVIDER", "local") or "local",
-        ollama_url=_required("OLLAMA_URL"),
+        llm_provider=_optional("LLM_PROVIDER", "anthropic") or "anthropic",
+        embedding_provider=_optional("EMBEDDING_PROVIDER", "cohere") or "cohere",
+        rerank_provider=_optional("RERANK_PROVIDER", "cohere") or "cohere",
         llm_model=_required("LLM_MODEL"),
         llm_models={
             p: m
-            for p in ("ollama", "gemini", "groq", "anthropic")
+            for p in ("gemini", "groq", "anthropic")
             if (m := _optional(f"LLM_MODEL_{p.upper()}"))
         },
         embedding_model=_required("EMBEDDING_MODEL"),

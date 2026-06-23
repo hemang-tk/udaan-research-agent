@@ -1,6 +1,5 @@
 import type { Config } from "@udaan/shared";
 import { createLLMProvider } from "@udaan/shared";
-import { registerOllama } from "../providers/ollama.js";
 import { registerGemini } from "../providers/gemini.js";
 import { registerGroq } from "../providers/groq.js";
 import { registerAnthropic } from "../providers/anthropic.js";
@@ -21,9 +20,8 @@ export interface BuildDepsHooks {
 
 export function buildPipelineDeps(config: Config, hooks: BuildDepsHooks = {}): PipelineDeps {
   // Register every LLM provider so createLLMProvider() can resolve any LLM_PROVIDER
-  // (ollama | gemini | groq | anthropic). server.ts/worker.ts reach providers via
-  // this path, not src/index.ts, so the registrations must live here too.
-  registerOllama();
+  // (gemini | groq | anthropic). server.ts reaches providers via this path, not
+  // src/index.ts, so the registrations must live here too.
   registerGemini();
   registerGroq();
   registerAnthropic();

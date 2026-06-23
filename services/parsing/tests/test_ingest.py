@@ -3,7 +3,13 @@ import json
 from udaan_parsing.chunking import Chunk
 from udaan_parsing.ingest import ingest_document
 from udaan_parsing.store import InMemoryClaimStore
-from udaan_shared import HashingEmbeddingProvider
+
+
+class FakeEmbedding:
+    """Deterministic, dependency-free 384-dim embedding for tests (no network)."""
+
+    def embed(self, texts: list[str], input_type: str = "search_document") -> list[list[float]]:
+        return [[float(len(t) % 7)] * 384 for t in texts]
 
 
 class StubLLM:
@@ -32,7 +38,7 @@ def test_ingest_attaches_embeddings_and_stores_claims():
         "proj_1",
         parse=fake_parse,
         llm=StubLLM(response),
-        embed=HashingEmbeddingProvider(),
+        embed=FakeEmbedding(),
         store=store,
     )
 

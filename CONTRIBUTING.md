@@ -7,30 +7,30 @@ review/merge workflow.
 
 - **Node.js 20+** and **pnpm**
 - **uv** (Python package manager) and **Python 3.11+**
-- **Docker** (for Qdrant, Redis, MinIO)
-- **Ollama** (optional, for the local LLM)
+- Accounts/keys for the hosted services — see [DEPLOY.md](./DEPLOY.md)
+
+> `main` is the hosted-only build (Hugging Face + external APIs). The full
+> self-hosted stack (own models + local infra) lives on the `local-infra` branch.
 
 ## Local setup
 
 ```bash
-# one command brings up infra + services + API + web (Git Bash on Windows)
+# one command brings up services + API + web (Git Bash on Windows)
 bash run.sh
 ```
 
 Or manually:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d
-cp infra/.env.example infra/.env
+cp infra/.env.example infra/.env        # then fill in hosted endpoints + keys
 pnpm install
-(cd services/ranking && uv sync) && (cd services/parsing && uv sync) && (cd services/synthesis && uv sync)
+(cd services/ranking && uv sync) && (cd services/parsing && uv sync --extra s3 --extra qdrant) && (cd services/synthesis && uv sync --extra ml --extra qdrant)
 pnpm --filter @udaan/orchestrator dev   # API :8080
 pnpm --filter @udaan/web dev            # UI  :5173
 ```
 
-The pipeline runs without the heavy ML stack via deterministic fallbacks. For
-the real models: `uv sync --extra ml --extra qdrant` per service, and
-`ollama pull` the configured model.
+Synthesis keeps scikit-learn clustering (`--extra ml`, CPU-only); ranking and
+parsing have no ML deps (Cohere reranks, LlamaParse parses).
 
 ## Tests
 
@@ -47,7 +47,7 @@ just one language view.
 
 ## Branches & commits
 
-- **Branch per unit of work**, named for it — e.g. `feat-bullmq-worker`,
+- **Branch per unit of work**, named for it — e.g. `feat-cohere-rerank`,
   `fix-rerank-timeout`. Don't commit directly to `main`.
 - **Commit granularity:** one commit per self-contained, working change (a
   contract added, a provider wired). Avoid one giant commit; avoid trivial

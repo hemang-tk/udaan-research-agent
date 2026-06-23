@@ -12,13 +12,10 @@ dependencies = [
   "udaan-shared",
 ]
 
-# Heavy/optional stacks. Base install uses pypdf parsing + hashing embeddings
-# + in-memory store, so the pipeline runs offline:
-#   uv sync --extra ml --extra qdrant
-# torch/torchvision are pulled from the CUDA index below so embeddings + Docling
-# run on the GPU; drop that pin (or change the index) on a CPU-only/other host.
+# Hosted-only build: parsing uses the LlamaParse cloud API + Cohere embeddings,
+# so the service stays light (no torch/Docling). Install the storage extras:
+#   uv sync --extra s3 --extra qdrant
 [project.optional-dependencies]
-ml = ["docling>=2.0", "sentence-transformers>=3.0", "torch>=2.2", "torchvision>=0.17"]
 qdrant = ["qdrant-client>=1.10"]
 s3 = ["boto3>=1.34"]
 
@@ -28,13 +25,6 @@ dev = ["pytest>=8", "httpx>=0.27"]
 [tool.uv.sources]
 udaan-contracts = { path = "../../packages/contracts/python", editable = true }
 udaan-shared = { path = "../shared", editable = true }
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
 
 [build-system]
 requires = ["hatchling"]
