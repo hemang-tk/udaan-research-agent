@@ -49,3 +49,17 @@ export interface AskResponse {
   answer: string;
   citations: ChatCitation[];
 }
+
+/** Elicit-style per-paper extraction table. */
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+export interface TableRow {
+  doi: string | null;
+  values: Record<string, string>;
+}
+export interface TableResult {
+  columns: TableColumn[];
+  rows: TableRow[];
+}

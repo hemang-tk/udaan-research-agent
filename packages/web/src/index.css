@@ -1335,6 +1335,112 @@ a:hover {
   font-size: 15px;
   line-height: 1.6;
 }
+
+/* ===================== Brief/Table toggle + extraction table ===================== */
+.pane-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--line-800);
+  border-radius: 999px;
+  background: var(--card);
+}
+.pane-toggle__btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-400);
+  background: transparent;
+  border: none;
+  padding: 6px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.pane-toggle__btn--active {
+  color: #042b20;
+  background: var(--grad-accent);
+}
+.pane-toggle__btn:not(.pane-toggle__btn--active):hover {
+  color: var(--t-100);
+}
+
+.table-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 56px 20px;
+  max-width: 540px;
+  margin: 0 auto;
+}
+.table-empty__icon {
+  font-size: 30px;
+  color: var(--t-600);
+}
+
+.xtable-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.xtable-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.xtable-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line-800);
+  border-radius: var(--radius);
+}
+.xtable {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 680px;
+  font-size: 13.5px;
+}
+.xtable th,
+.xtable td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-900);
+  border-right: 1px solid var(--line-900);
+}
+.xtable th {
+  position: sticky;
+  top: 0;
+  background: var(--card-2);
+  color: var(--t-300);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.xtable td {
+  color: var(--t-200);
+  line-height: 1.55;
+}
+.xtable tr:last-child td {
+  border-bottom: none;
+}
+.xtable th:last-child,
+.xtable td:last-child {
+  border-right: none;
+}
+.xtable__paper {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.xtable tbody tr:hover td {
+  background: var(--card);
+}
 .paywall__title {
   font-size: 14px;
   font-weight: 600;

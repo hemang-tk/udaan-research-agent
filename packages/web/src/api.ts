@@ -5,6 +5,7 @@ import type {
   ProgressEvent,
   ResearchBrief,
   ResearchSummary,
+  TableResult,
 } from "./types.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -134,15 +135,44 @@ export async function getResearchRecord(id: string): Promise<ResearchDetail | nu
   };
 }
 
-/** Ask a question answered only from this research's papers (RAG). */
-export async function askResearch(id: string, question: string): Promise<AskResponse> {
+/** Ask a question answered only from this research's papers (RAG). `history` carries
+ *  prior turns so follow-ups ("what about its limits?") resolve conversationally. */
+export async function askResearch(
+  id: string,
+  question: string,
+  history: { role: "user" | "assistant"; content: string }[] = [],
+): Promise<AskResponse> {
   const res = await fetch(`${API_BASE}/research/${id}/ask`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history }),
   });
   if (!res.ok) throw new Error(`Ask failed (${res.status})`);
   return res.json();
+}
+
+/** Cached per-paper extraction table for a research, or null if not generated yet. */
+export async function getResearchTable(id: string): Promise<TableResult | null> {
+  try {
+    const res = await fetch(`${API_BASE}/research/${id}/table`);
+    if (!res.ok) return null;
+    const d = (await res.json()) as { generated?: boolean; table?: TableResult };
+    return d.generated && d.table ? d.table : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Generate (or regenerate) the extraction table — one LLM call per paper. */
+export async function generateResearchTable(id: string): Promise<TableResult> {
+  const res = await fetch(`${API_BASE}/research/${id}/table`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error(`Table failed (${res.status})`);
+  const d = (await res.json()) as { table: TableResult };
+  return d.table;
 }
 
 export async function uploadPdf(input: {

@@ -177,10 +177,24 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     type: "object",
     additionalProperties: false,
     required: ["question"],
-    properties: { question: { type: "string", minLength: 1 } },
+    properties: {
+      question: { type: "string", minLength: 1 },
+      history: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["role", "content"],
+          properties: { role: { type: "string" }, content: { type: "string" } },
+        },
+      },
+    },
   };
 
-  app.post<{ Params: { id: string }; Body: { question: string } }>(
+  app.post<{
+    Params: { id: string };
+    Body: { question: string; history?: { role: "user" | "assistant"; content: string }[] };
+  }>(
     "/research/:id/ask",
     { schema: { body: askBodySchema } },
     async (req, reply) => {
@@ -196,9 +210,46 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
       const parsing = new HttpParsingService(loadConfig().services.parsing);
       try {
-        return await parsing.ask({ projectId, question });
+        return await parsing.ask({ projectId, question, history: req.body?.history ?? [] });
       } catch {
         return reply.code(502).send({ error: "chat service unavailable" });
+      }
+    },
+  );
+
+  // Resolve a research's projectId from the live job or the persisted record.
+  const resolveProjectId = async (id: string): Promise<string | undefined> => {
+    const live = jobs.get(id)?.projectId;
+    if (live) return live;
+    const rec = await getResearchStore()
+      .get(id)
+      .catch(() => null);
+    return rec?.projectId;
+  };
+
+  // Elicit-style extraction table. GET returns the cached table (or generated:false);
+  // POST (re)generates it per paper and caches it in Neon so views are free.
+  app.get<{ Params: { id: string } }>("/research/:id/table", async (req) => {
+    const table = await getResearchStore()
+      .getTable(req.params.id)
+      .catch(() => null);
+    return { generated: !!table, table };
+  });
+
+  app.post<{ Params: { id: string }; Body: { columns?: { key: string; label?: string; prompt?: string }[] } }>(
+    "/research/:id/table",
+    async (req, reply) => {
+      const projectId = await resolveProjectId(req.params.id);
+      if (!projectId) return reply.code(404).send({ error: "not found" });
+      const parsing = new HttpParsingService(loadConfig().services.parsing);
+      try {
+        const table = await parsing.table({ projectId, columns: req.body?.columns });
+        await getResearchStore()
+          .saveTable(req.params.id, table)
+          .catch(() => undefined);
+        return { generated: true, table };
+      } catch {
+        return reply.code(502).send({ error: "table service unavailable" });
       }
     },
   );

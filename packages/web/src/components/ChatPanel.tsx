@@ -64,10 +64,14 @@ export function ChatPanel({ researchId, query, brief }: ChatPanelProps) {
     const q = question.trim();
     if (!q || busy) return;
     setInput("");
+    // Prior turns (excluding errors) become conversational memory for retrieval.
+    const history = messages
+      .filter((m) => !m.error)
+      .map((m) => ({ role: (m.role === "ai" ? "assistant" : "user") as "user" | "assistant", content: m.text }));
     setMessages((m) => [...m, { role: "user", text: q }]);
     setBusy(true);
     try {
-      const res = await askResearch(researchId, q);
+      const res = await askResearch(researchId, q, history);
       setMessages((m) => [...m, { role: "ai", text: res.answer, citations: res.citations }]);
     } catch {
       setMessages((m) => [
