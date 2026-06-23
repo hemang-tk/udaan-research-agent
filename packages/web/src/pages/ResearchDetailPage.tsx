@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Brief } from "../components/Brief.js";
 import { ChatPanel } from "../components/ChatPanel.js";
+import { ExtractionTable } from "../components/ExtractionTable.js";
 import { PaywallUploads } from "../components/PaywallUploads.js";
 import { PipelineLedger } from "../components/PipelineLedger.js";
 import { useRunStatus } from "../RunStatusContext.js";
@@ -25,6 +26,7 @@ export function ResearchDetailPage() {
   const [details, setDetails] = useState<Record<number, string | undefined>>({});
   const [message, setMessage] = useState("");
   const [showPaywall, setShowPaywall] = useState(true);
+  const [briefView, setBriefView] = useState<"brief" | "table">("brief");
 
   useEffect(() => {
     let alive = true;
@@ -180,15 +182,42 @@ export function ResearchDetailPage() {
       {Bar}
       <div className="detail__panes">
         <div className="pane pane--brief">
-          {paywalled.length > 0 &&
-            (showPaywall ? (
-              <PaywallUploads entries={paywalled} onClose={() => setShowPaywall(false)} />
-            ) : (
-              <button type="button" className="paywall__reopen" onClick={() => setShowPaywall(true)}>
-                ⚠ Show paywalled sources ({paywalled.length})
-              </button>
-            ))}
-          {brief && <Brief brief={brief} />}
+          <div className="pane-toggle" role="tablist" aria-label="View">
+            <button
+              type="button"
+              className={`pane-toggle__btn${briefView === "brief" ? " pane-toggle__btn--active" : ""}`}
+              onClick={() => setBriefView("brief")}
+            >
+              Brief
+            </button>
+            <button
+              type="button"
+              className={`pane-toggle__btn${briefView === "table" ? " pane-toggle__btn--active" : ""}`}
+              onClick={() => setBriefView("table")}
+            >
+              Table
+            </button>
+          </div>
+
+          {briefView === "brief" ? (
+            <>
+              {paywalled.length > 0 &&
+                (showPaywall ? (
+                  <PaywallUploads entries={paywalled} onClose={() => setShowPaywall(false)} />
+                ) : (
+                  <button
+                    type="button"
+                    className="paywall__reopen"
+                    onClick={() => setShowPaywall(true)}
+                  >
+                    ⚠ Show paywalled sources ({paywalled.length})
+                  </button>
+                ))}
+              {brief && <Brief brief={brief} />}
+            </>
+          ) : (
+            <ExtractionTable researchId={id ?? ""} />
+          )}
         </div>
         <div className="pane pane--chat">
           <ChatPanel researchId={id ?? ""} query={query} brief={brief as ResearchBrief} />

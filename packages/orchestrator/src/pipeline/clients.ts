@@ -44,6 +44,19 @@ export interface AskResult {
   citations: AskCitation[];
 }
 
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+export interface TableRow {
+  doi: string | null;
+  values: Record<string, string>;
+}
+export interface TableResult {
+  columns: TableColumn[];
+  rows: TableRow[];
+}
+
 export interface ParsingService {
   ingest(input: {
     projectId: string;
@@ -53,7 +66,17 @@ export interface ParsingService {
   }): Promise<IngestResult>;
   /** RAG chat over a project's stored passages ("ask these papers"). Optional on
    *  the interface (the pipeline never calls it); the server uses the concrete class. */
-  ask?(input: { projectId: string; question: string; topK?: number }): Promise<AskResult>;
+  ask?(input: {
+    projectId: string;
+    question: string;
+    topK?: number;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }): Promise<AskResult>;
+  /** Per-paper extraction table (Elicit-style). Optional, server-only. */
+  table?(input: {
+    projectId: string;
+    columns?: { key: string; label?: string; prompt?: string }[];
+  }): Promise<TableResult>;
   quality?(): Promise<StageQuality[]>;
 }
 
@@ -129,7 +152,12 @@ export class HttpParsingService implements ParsingService {
       retries: 0,
     });
   }
-  async ask(input: { projectId: string; question: string; topK?: number }): Promise<AskResult> {
+  async ask(input: {
+    projectId: string;
+    question: string;
+    topK?: number;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }): Promise<AskResult> {
     const res = await resilientFetch(
       `${this.baseUrl}/ask`,
       {
@@ -141,6 +169,23 @@ export class HttpParsingService implements ParsingService {
     );
     if (!res.ok) throw new Error(`${this.baseUrl}/ask -> ${res.status} ${res.statusText}`);
     return (await res.json()) as AskResult;
+  }
+  async table(input: {
+    projectId: string;
+    columns?: { key: string; label?: string; prompt?: string }[];
+  }): Promise<TableResult> {
+    // Generous timeout: one LLM call per paper (no retry — regenerate on demand).
+    const res = await resilientFetch(
+      `${this.baseUrl}/table`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: 120_000, retries: 0 },
+    );
+    if (!res.ok) throw new Error(`${this.baseUrl}/table -> ${res.status} ${res.statusText}`);
+    return (await res.json()) as TableResult;
   }
   quality() {
     return fetchQuality(this.baseUrl);

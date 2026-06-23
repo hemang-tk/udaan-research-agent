@@ -173,6 +173,8 @@ class ChunkStore(Protocol):
 
     def search(self, project_id: str, query_vector: list[float], top_k: int = 6) -> list[dict]: ...
 
+    def documents_for_project(self, project_id: str) -> dict: ...
+
 
 class InMemoryChunkStore:
     def __init__(self) -> None:
@@ -204,6 +206,17 @@ class InMemoryChunkStore:
         ]
         scored.sort(key=lambda d: d["score"], reverse=True)
         return scored[:top_k]
+
+    def documents_for_project(self, project_id, max_per_doc=12) -> dict:
+        docs: dict = {}
+        for payload, _ in self._points:
+            if payload.get("projectId") != project_id:
+                continue
+            doi = payload.get("documentDoi")
+            docs.setdefault(doi, [])
+            if len(docs[doi]) < max_per_doc:
+                docs[doi].append(payload.get("text") or "")
+        return docs
 
 
 class QdrantChunkStore:
@@ -313,3 +326,28 @@ class QdrantChunkStore:
             # Collection may not exist yet (a research run before chunk storage) — no passages.
             return []
         return [{**(p.payload or {}), "score": p.score} for p in res.points]
+
+    def documents_for_project(self, project_id, max_per_doc=12) -> dict:
+        """Group this project's stored passages by source document (for the
+        per-paper extraction table). Returns {documentDoi: [chunk texts]}."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        flt = Filter(must=[FieldCondition(key="projectId", match=MatchValue(value=project_id))])
+        try:
+            points, _ = self.client.scroll(
+                collection_name=self.collection,
+                scroll_filter=flt,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+        except Exception:
+            return {}
+        docs: dict = {}
+        for p in points:
+            pl = p.payload or {}
+            doi = pl.get("documentDoi")
+            docs.setdefault(doi, [])
+            if len(docs[doi]) < max_per_doc:
+                docs[doi].append(pl.get("text") or "")
+        return docs

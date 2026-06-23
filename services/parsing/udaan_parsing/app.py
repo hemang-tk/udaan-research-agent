@@ -139,6 +139,8 @@ class AskRequest(BaseModel):
     project_id: str = Field(alias="projectId")
     question: str
     top_k: int = Field(default=6, alias="topK")
+    # Prior turns ([{role: "user"|"assistant", content}]) for conversational memory.
+    history: list[dict] = Field(default_factory=list)
 
 
 _ASK_SYSTEM = (
@@ -175,6 +177,41 @@ _REWRITE_SYSTEM = (
     "Rewrite the user's question into a different, broader search query that could surface relevant "
     "passages from research papers. Return ONLY the rewritten query — no preamble, no quotes."
 )
+_CONTEXTUALIZE_SYSTEM = (
+    "Given the conversation so far and a follow-up question, rewrite the follow-up into a standalone "
+    "search query that captures the user's intent and resolves any references or pronouns (e.g. 'it', "
+    "'they', 'that study'). Return ONLY the rewritten query — no preamble, no quotes."
+)
+
+
+def _history_messages(history: list[dict], limit: int = 6) -> list[dict]:
+    """Normalize recent prior turns into LLM messages (user/assistant only)."""
+    msgs: list[dict] = []
+    for turn in history[-limit:]:
+        role = "assistant" if str(turn.get("role")) == "assistant" else "user"
+        content = str(turn.get("content") or "").strip()
+        if content:
+            msgs.append({"role": role, "content": content})
+    return msgs
+
+
+def _contextualize_query(history: list[dict], question: str) -> str:
+    """Conversational memory: fold prior turns into a standalone retrieval query so a
+    follow-up like 'what about its limits?' resolves correctly. Fails open."""
+    if not history:
+        return question
+    convo = "\n".join(f"{m['role']}: {m['content']}" for m in _history_messages(history))
+    if not convo:
+        return question
+    try:
+        out = _chat_llm_provider().complete(
+            [{"role": "user", "content": f"Conversation:\n{convo}\n\nFollow-up: {question}"}],
+            system=_CONTEXTUALIZE_SYSTEM,
+            max_tokens=80,
+        )
+        return out.strip().strip('"') or question
+    except Exception:
+        return question
 
 
 def _embed_query(embed, text: str) -> list[float]:
@@ -253,24 +290,27 @@ def ask(req: AskRequest) -> dict:
     cohere_key = load_config().api_keys.get("cohere")
     top_k = max(1, min(req.top_k, 12))
 
+    # Conversational memory: resolve the follow-up into a standalone search query.
+    search_q = _contextualize_query(req.history, req.question)
+
     def retrieve(question: str):
         candidates = chunk_store.search(req.project_id, _embed_query(embed, question), top_k=_CANDIDATE_K)
         return _rerank(cohere_key, question, candidates, top_k) if candidates else []
 
-    hits = retrieve(req.question)
+    hits = retrieve(search_q)
     if not hits:
         return {"answer": _NO_PASSAGES, "citations": []}
 
     # #2 CRAG: grade the retrieved context; keep only relevant, or correct once.
     if _CRAG_ENABLED:
-        grade, relevant = _crag_grade(req.question, hits)
+        grade, relevant = _crag_grade(search_q, hits)
         if grade == "ambiguous" and relevant:
             hits = [hits[i - 1] for i in relevant if 1 <= i <= len(hits)] or hits
         elif grade == "incorrect":
-            alt = _rewrite_query(req.question)
-            retry = retrieve(alt) if alt != req.question else []
+            alt = _rewrite_query(search_q)
+            retry = retrieve(alt) if alt != search_q else []
             if retry:
-                g2, rel2 = _crag_grade(req.question, retry)
+                g2, rel2 = _crag_grade(search_q, retry)
                 if g2 == "incorrect":
                     return {"answer": _ABSTAIN, "citations": []}
                 hits = (
@@ -292,7 +332,80 @@ def ask(req: AskRequest) -> dict:
         context_lines.append(f"[{i}] ({src}; {loc})\n{text}")
 
     user = "Passages:\n\n" + "\n\n".join(context_lines) + f"\n\nQuestion: {req.question}"
-    answer = _chat_llm_provider().complete(
-        [{"role": "user", "content": user}], system=_ASK_SYSTEM, max_tokens=700
-    )
+    # Prior turns give the model context to resolve references; the strict system
+    # prompt + passages keep the answer grounded.
+    messages = _history_messages(req.history) + [{"role": "user", "content": user}]
+    answer = _chat_llm_provider().complete(messages, system=_ASK_SYSTEM, max_tokens=700)
     return {"answer": answer.strip(), "citations": citations}
+
+
+# --- Elicit-style data-extraction table -----------------------------------
+# One row per ingested paper, one column per attribute. Each paper gets a single
+# LLM call that fills every column from its stored passages (cheap, bounded).
+
+_DEFAULT_COLUMNS = [
+    {"key": "objective", "label": "Objective", "prompt": "the paper's main research objective or question"},
+    {"key": "method", "label": "Method", "prompt": "the method, approach, or study design used"},
+    {"key": "findings", "label": "Key findings", "prompt": "the main findings or results"},
+    {"key": "limitations", "label": "Limitations", "prompt": "limitations or gaps the authors note"},
+]
+
+_TABLE_SYSTEM = (
+    "Extract the requested fields from the passages of ONE research paper. Respond with JSON only: "
+    "an object mapping each field key to a concise value (a short phrase or one sentence). If the "
+    'passages do not state a field, use "Not reported". Never invent information beyond the passages.'
+)
+
+
+class TableColumn(BaseModel):
+    key: str
+    label: str | None = None
+    prompt: str | None = None
+
+
+class TableRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    project_id: str = Field(alias="projectId")
+    columns: list[TableColumn] = Field(default_factory=list)
+
+
+def _extract_row(doi, texts, columns) -> dict:
+    context = "\n\n".join(texts)[:6000]
+    col_desc = "\n".join(f'- "{c["key"]}": {c["prompt"]}' for c in columns)
+    try:
+        raw = _chat_llm_provider().complete(
+            [{"role": "user", "content": f"Fields:\n{col_desc}\n\nPassages:\n{context}"}],
+            system=_TABLE_SYSTEM,
+            json_schema={"type": "object"},
+            max_tokens=500,
+        )
+        data = json.loads(raw)
+        values = {
+            c["key"]: (str(data.get(c["key"], "Not reported")).strip() or "Not reported")
+            for c in columns
+        }
+    except Exception:
+        values = {c["key"]: "Not reported" for c in columns}
+    return {"doi": doi, "values": values}
+
+
+@app.post("/table")
+def table(req: TableRequest) -> dict:
+    """Build a per-paper extraction table: one row per ingested document, columns
+    filled from that paper's stored passages with one LLM call each."""
+    _, _, _, _, chunk_store = _deps()
+    if req.columns:
+        columns = [
+            {"key": c.key, "label": c.label or c.key.title(), "prompt": c.prompt or c.key}
+            for c in req.columns
+        ]
+    else:
+        columns = _DEFAULT_COLUMNS
+
+    docs = chunk_store.documents_for_project(req.project_id)
+    rows = [_extract_row(doi, texts, columns) for doi, texts in docs.items() if texts]
+    return {
+        "columns": [{"key": c["key"], "label": c["label"]} for c in columns],
+        "rows": rows,
+    }
