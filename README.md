@@ -26,7 +26,7 @@ Query → Gateway → Re-rank → Resolve → Ingest → Synthesis → Generatio
 | 1 | Query Orchestration | TS | NL query → compiled discovery manifest |
 | 2 | Open Graph Gateway | TS | OpenAlex/Semantic Scholar/Crossref → deduped candidates |
 | 3 | Cross-Encoder Re-Ranking | Py | rank candidates → top 20 |
-| 4 | Full-Text Resolution | TS | resolve PDFs → MinIO/S3 vault (paywall-aware) |
+| 4 | Full-Text Resolution | TS | resolve PDFs → Supabase S3 vault (paywall-aware) |
 | 5 | Ingestion & Parsing | Py | parse → **quote-anchored** claims → Qdrant |
 | 6 | Synthesis & Polarity | Py | cluster → AGREEMENT / CONTRADICTION / THIN_EVIDENCE |
 | 7 | Generation & Citation Weaving | TS | constrained draft → hallucination filter → cited brief |
@@ -86,9 +86,12 @@ pnpm -r test                              # TypeScript (vitest)
 
 All endpoints, credentials, and model names are environment variables
 (`infra/.env`, see `infra/.env.example`) — no hardcoded hosts, so deploying is a
-config change. Providers (LLM / embedding / re-rank) are swappable between local,
-free-tier API, and paid (Claude) via `LLM_PROVIDER` / `EMBEDDING_PROVIDER` /
-`RERANK_PROVIDER`.
+config change. Providers are selected via `LLM_PROVIDER` (a comma-list of
+Groq/Gemini/Anthropic for round-robin + failover; default `anthropic`),
+`EMBEDDING_PROVIDER`, and `RERANK_PROVIDER` (both `cohere` on main). The chat/RAG
+("ask these papers") uses a Groq-first, Anthropic-fallback chain via
+`CHAT_LLM_PROVIDER`. The self-hosted provider implementations (local models +
+infra) live on the `local-infra` branch.
 
 ## Contributing
 

@@ -11,7 +11,7 @@ Crucially, this phase is designed to operate strictly within legal boundaries, r
 ## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — async streaming downloads.
-- **Object storage:** **MinIO** (S3-compatible) locally via docker-compose; `storagePointer` stays an `s3://` URI, so a later move to AWS S3 / GCS is an endpoint + credential config change, not a code change.
+- **Object storage:** **Supabase Storage** (S3-compatible) as the PDF vault, via the standard S3 client; `storagePointer` stays an `s3://` URI, so the endpoint + credentials are pure config (no code change to switch buckets/providers). The self-hosted variant — a local MinIO container — lives on the `local-infra` branch.
 - **Resolvers:** local cache → arXiv/PMC direct → Unpaywall (as described below).
 
 ---
@@ -109,7 +109,7 @@ enum ResolutionStatus {
 
 ### 3.2. Phase 4 Output (Resolution Manifest)
 
-This payload is passed to Phase 5 (Local Ingestion & Parsing) to instruct the Docling parsers on where to find the physical files.
+This payload is passed to Phase 5 (Ingestion & Parsing) to instruct the parser on where to find the physical files in the vault.
 
 ```json
 {
@@ -172,4 +172,4 @@ Academic publishers often return `HTTP 200 OK` for paywalled papers, but the dow
 
 ---
 
-This architecture ensures Phase 4 is secure, network-efficient, and fully compliant with publisher restrictions, seamlessly handing off pristine PDF assets to the Docling parsers in Phase 5.
+This architecture ensures Phase 4 is secure, network-efficient, and fully compliant with publisher restrictions, seamlessly handing off pristine PDF assets to the parser in Phase 5.

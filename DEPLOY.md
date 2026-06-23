@@ -20,9 +20,12 @@ three Python services itself over localhost, so you expose **one** port.
 
 ## 1. Prerequisites
 
-- Docker (for Qdrant + MinIO via `infra/docker-compose.yml`)
 - Node 20 + pnpm, and `uv` for the Python services
-- A free **Groq** API key — https://console.groq.com (no card)
+- Accounts/keys for the hosted backing services (all free tier): a **Groq** API
+  key — https://console.groq.com (no card) — plus **Cohere** (embeddings +
+  rerank), **LlamaParse** (parsing), **Qdrant Cloud** (vectors), and **Supabase
+  Storage** (the S3 PDF vault). There is no local Docker/MinIO/Qdrant to run on
+  main — the self-hosted `docker-compose` stack lives on the `local-infra` branch.
 - A tunnel tool — either:
   - **ngrok** (free, 1 static domain): https://ngrok.com — or
   - **cloudflared** (free quick tunnel, no account): `cloudflared tunnel --url …`

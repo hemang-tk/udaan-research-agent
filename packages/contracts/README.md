@@ -19,9 +19,9 @@ match the schemas. Treat the schema as authoritative if they ever disagree.
 
 ## The rule
 
-**Validate at every boundary.** Every cross-service HTTP call and every BullMQ
-job payload validates against the matching schema, so a drift between the TS and
-Python sides fails loudly instead of silently corrupting traceability.
+**Validate at every boundary.** Every cross-service HTTP call (and every payload
+handed between phases) validates against the matching schema, so a drift between
+the TS and Python sides fails loudly instead of silently corrupting traceability.
 
 ## Coverage
 
