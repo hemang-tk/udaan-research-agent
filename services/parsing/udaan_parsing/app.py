@@ -4,10 +4,12 @@ base64-over-HTTP) and returns the extracted-claim summary."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import replace
 
+import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 from udaan_shared import create_embedding_provider, create_llm_provider, load_config, register_defaults
@@ -148,29 +150,135 @@ _ASK_SYSTEM = (
     "- Be concise and specific (2–5 sentences)."
 )
 
+# Retrieve a wide candidate set by vector, then narrow it with the cross-encoder.
+_CANDIDATE_K = int(os.environ.get("CHAT_CANDIDATE_K", "20") or "20")
+# CRAG (corrective retrieval) is on by default; set ENABLE_CRAG=false to skip it.
+_CRAG_ENABLED = os.environ.get("ENABLE_CRAG", "true").strip().lower() != "false"
+
+_NO_PASSAGES = (
+    "I don't have the source passages for this research yet — it may have been run before chat "
+    "was enabled. Re-run the research to enable chat over its papers."
+)
+_ABSTAIN = (
+    "The papers behind this brief don't appear to cover that. Try rephrasing the question, or ask "
+    "about what the papers do discuss."
+)
+
+_CRAG_GRADER_SYSTEM = (
+    "You are a retrieval grader. Given a question and numbered passages, judge whether the passages "
+    "contain enough information to answer it. Respond with JSON only: "
+    '{"grade": "correct" | "ambiguous" | "incorrect", "relevant": [passage numbers that help]}. '
+    '"correct" = the passages clearly answer it; "ambiguous" = only some passages are relevant; '
+    '"incorrect" = none are relevant.'
+)
+_REWRITE_SYSTEM = (
+    "Rewrite the user's question into a different, broader search query that could surface relevant "
+    "passages from research papers. Return ONLY the rewritten query — no preamble, no quotes."
+)
+
+
+def _embed_query(embed, text: str) -> list[float]:
+    # Asymmetric: queries embed as "search_query" against "search_document" chunks.
+    try:
+        return embed.embed([text], input_type="search_query")[0]
+    except TypeError:
+        return embed.embed([text])[0]
+
+
+def _cohere_rerank(api_key: str | None, query: str, documents: list[str]):
+    """#1 Cohere rerank-v3.5. Returns [(candidate_index, score)] ordered by relevance,
+    or None on any failure (caller falls back to the vector order)."""
+    if not api_key or not documents:
+        return None
+    try:
+        resp = httpx.post(
+            "https://api.cohere.com/v2/rerank",
+            json={"model": "rerank-v3.5", "query": query, "documents": documents, "top_n": len(documents)},
+            headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        return [(int(it["index"]), float(it["relevance_score"])) for it in resp.json().get("results", [])]
+    except Exception:
+        return None
+
+
+def _rerank(cohere_key, question, candidates, top_n):
+    """Cross-encoder rerank the vector candidates; graceful fallback to vector order."""
+    ranked = _cohere_rerank(cohere_key, question, [(c.get("text") or "") for c in candidates])
+    if not ranked:
+        return candidates[:top_n]
+    return [candidates[idx] for idx, _ in ranked[:top_n]]
+
+
+def _crag_grade(question, hits):
+    """#2 CRAG: grade whether `hits` can answer `question` -> (grade, relevant_1based).
+    Fails OPEN — any grading hiccup is treated as 'correct' so an answer is never blocked."""
+    if not hits:
+        return "incorrect", []
+    listing = "\n\n".join(f"[{i}] {(h.get('text') or '')[:500]}" for i, h in enumerate(hits, start=1))
+    try:
+        raw = _chat_llm_provider().complete(
+            [{"role": "user", "content": f"Question: {question}\n\nPassages:\n{listing}"}],
+            system=_CRAG_GRADER_SYSTEM,
+            json_schema={"type": "object"},
+            max_tokens=200,
+        )
+        data = json.loads(raw)
+        grade = str(data.get("grade", "correct")).lower()
+        if grade not in ("correct", "ambiguous", "incorrect"):
+            grade = "correct"
+        relevant = [int(n) for n in data.get("relevant", []) if isinstance(n, (int, float))]
+        return grade, relevant
+    except Exception:
+        return "correct", list(range(1, len(hits) + 1))
+
+
+def _rewrite_query(question):
+    try:
+        out = _chat_llm_provider().complete(
+            [{"role": "user", "content": question}], system=_REWRITE_SYSTEM, max_tokens=60
+        )
+        return out.strip().strip('"') or question
+    except Exception:
+        return question
+
 
 @app.post("/ask")
 def ask(req: AskRequest) -> dict:
-    """RAG over one research's full-text chunks: embed the question, vector-search
-    this project's passages, and answer with inline [n] citations."""
+    """Advanced RAG over one research's full-text chunks: vector retrieval ->
+    cross-encoder rerank (#1) -> CRAG relevance grading + one corrective retry (#2)
+    -> grounded answer with inline [n] citations."""
     _, embed, _, _, chunk_store = _deps()
-
-    # Embed the question as a retrieval query (asymmetric to stored documents).
-    try:
-        qvec = embed.embed([req.question], input_type="search_query")[0]
-    except TypeError:
-        qvec = embed.embed([req.question])[0]
-
+    cohere_key = load_config().api_keys.get("cohere")
     top_k = max(1, min(req.top_k, 12))
-    hits = chunk_store.search(req.project_id, qvec, top_k=top_k)
+
+    def retrieve(question: str):
+        candidates = chunk_store.search(req.project_id, _embed_query(embed, question), top_k=_CANDIDATE_K)
+        return _rerank(cohere_key, question, candidates, top_k) if candidates else []
+
+    hits = retrieve(req.question)
     if not hits:
-        return {
-            "answer": (
-                "I don't have the source passages for this research yet — it may have been run "
-                "before chat was enabled. Re-run the research to enable chat over its papers."
-            ),
-            "citations": [],
-        }
+        return {"answer": _NO_PASSAGES, "citations": []}
+
+    # #2 CRAG: grade the retrieved context; keep only relevant, or correct once.
+    if _CRAG_ENABLED:
+        grade, relevant = _crag_grade(req.question, hits)
+        if grade == "ambiguous" and relevant:
+            hits = [hits[i - 1] for i in relevant if 1 <= i <= len(hits)] or hits
+        elif grade == "incorrect":
+            alt = _rewrite_query(req.question)
+            retry = retrieve(alt) if alt != req.question else []
+            if retry:
+                g2, rel2 = _crag_grade(req.question, retry)
+                if g2 == "incorrect":
+                    return {"answer": _ABSTAIN, "citations": []}
+                hits = (
+                    ([retry[i - 1] for i in rel2 if 1 <= i <= len(retry)] or retry)
+                    if g2 == "ambiguous"
+                    else retry
+                )
+            # retry found nothing -> fail open, answer from the original hits
 
     citations: list[dict] = []
     context_lines: list[str] = []
