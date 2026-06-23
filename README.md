@@ -7,6 +7,13 @@ paper.
 
 Per-phase architectural design lives in [`docs/`](./docs) — one doc per phase, plus the system-flow diagram.
 
+> **`main` is the hosted-only build** (Hugging Face + external APIs): all heavy
+> compute is on hosted services — Groq/Gemini/Anthropic (LLM), Cohere (embeddings
+> + rerank), LlamaParse (parsing), Qdrant Cloud, Supabase S3, Neon Postgres. There
+> are no local models, Ollama, Redis, or MinIO. The full self-hosted stack
+> (own models + local infra: Ollama, Docling, sentence-transformers, BullMQ/Redis,
+> docker-compose) lives on the **`local-infra`** branch.
+
 ## Pipeline
 
 ```
@@ -35,52 +42,36 @@ never averaged (Phase 6).
 packages/
   contracts/      schema-first contracts → TS types + Pydantic models
   shared/         12-factor config + swappable provider interfaces (TS)
-  orchestrator/   phases 1,2,4,7 + pipeline driver + HTTP API + BullMQ worker
+  orchestrator/   phases 1,2,4,7 + pipeline driver + HTTP API
   web/            React + Vite UI (live progress, cited brief)
 services/
   ranking/        Phase 3 (FastAPI)
   parsing/        Phase 5 (FastAPI)
   synthesis/      Phase 6 (FastAPI)
   shared/         Python config + provider implementations
-infra/            docker-compose (Qdrant, Redis, MinIO) + .env
+infra/            .env.example + Hugging Face Space launcher (hf-space/)
 ```
 
 ## Run it
 
-Prerequisites: Docker, Node 20+, pnpm, [uv](https://docs.astral.sh/uv/), and
-(optional) [Ollama](https://ollama.com) for the local LLM.
+Prerequisites: Node 20+, pnpm, [uv](https://docs.astral.sh/uv/), and accounts for
+the hosted services (Qdrant Cloud, Supabase S3, one of Groq/Gemini/Anthropic,
+Cohere, LlamaParse). See [DEPLOY.md](./DEPLOY.md) for the full hosted setup.
 
 ```bash
-bash run.sh            # Git Bash on Windows; brings up the whole stack
-```
-
-Then open the **Web UI at http://localhost:5173**. The UI also has a
-**"See a sample brief"** button so you can view it without the full backend.
-
-Manual start (equivalent to `run.sh`):
-
-```bash
-docker compose -f infra/docker-compose.yml up -d        # Qdrant, Redis, MinIO
-cp infra/.env.example infra/.env
-ollama pull qwen2.5:7b-instruct-q4_K_M                   # optional (LLM)
-(cd services/ranking   && uv run python -m udaan_ranking)    # :8001
-(cd services/parsing   && uv run python -m udaan_parsing)    # :8002
-(cd services/synthesis && uv run python -m udaan_synthesis)  # :8003
+cp infra/.env.example infra/.env       # then fill in your hosted endpoints + keys
+(cd services/ranking   && uv run python -m udaan_ranking)              # :8001
+(cd services/parsing   && uv run --extra s3 --extra qdrant python -m udaan_parsing)   # :8002
+(cd services/synthesis && uv run --extra ml --extra qdrant python -m udaan_synthesis) # :8003
 pnpm --filter @udaan/orchestrator dev                   # API :8080
 pnpm --filter @udaan/web dev                            # UI  :5173
 ```
 
-Everything runs **without the heavy ML stack** via deterministic fallbacks
-(lexical re-rank, pypdf parsing, hashing embeddings, greedy clustering). For the
-real models on a GPU:
+Then open the **Web UI at http://localhost:5173**. The UI also has a
+**"See a sample brief"** button so you can view it without the backend.
 
-```bash
-(cd services/ranking   && uv sync --extra ml)
-(cd services/parsing   && uv sync --extra ml --extra qdrant)
-(cd services/synthesis && uv sync --extra ml --extra qdrant)
-```
-
-Durable/scaled execution (needs Redis): `pnpm --filter @udaan/orchestrator worker`.
+Synthesis keeps scikit-learn clustering (`--extra ml`, CPU-only); ranking and
+parsing have no ML deps — Cohere does the reranking and LlamaParse the parsing.
 
 ## Test
 

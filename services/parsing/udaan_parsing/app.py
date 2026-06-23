@@ -14,7 +14,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 from udaan_shared import create_embedding_provider, create_llm_provider, load_config, register_defaults
 
-from .embeddings import register_sentence_transformers
 from .ingest import ingest_from_pointer
 from .objstore import InMemoryObjectStore, ObjectStore, S3ObjectStore
 from .parser import parser_quality, select_parser
@@ -28,7 +27,6 @@ from .store import (
 )
 
 register_defaults()
-register_sentence_transformers()  # overrides "local" embedding if ML extra present
 
 _log = logging.getLogger("udaan.parsing")
 
