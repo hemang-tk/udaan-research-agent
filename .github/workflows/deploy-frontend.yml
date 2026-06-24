@@ -45,7 +45,8 @@ jobs:
       - name: Pull Vercel project settings
         run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
 
-      - name: Build (uses vercel.json: pnpm --filter @udaan/web build)
+      # Build via vercel.json (installs from repo root, builds packages/web).
+      - name: Build frontend
         run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy prebuilt output to production
