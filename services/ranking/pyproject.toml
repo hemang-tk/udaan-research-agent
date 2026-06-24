@@ -11,12 +11,8 @@ dependencies = [
   "udaan-shared",
 ]
 
-# Heavy ML stack is OPTIONAL. Without it the service runs the deterministic
-# lexical fallback; install to enable the GPU cross-encoder:
-#   uv sync --extra ml
-[project.optional-dependencies]
-ml = ["sentence-transformers>=3.0", "torch>=2.2"]
-
+# Hosted-only build: reranking is the Cohere rerank API (stdlib HTTP), so the
+# service needs no ML stack. Just `uv sync`.
 [dependency-groups]
 dev = ["pytest>=8", "httpx>=0.27"]
 

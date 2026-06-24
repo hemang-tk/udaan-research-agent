@@ -1,5 +1,5 @@
 from .config import Config, S3Config, load_config
-from .impl import HashingEmbeddingProvider, OllamaLLMProvider, register_defaults
+from .impl import register_defaults
 from .providers import (
     EmbeddingProvider,
     LLMProvider,
@@ -25,7 +25,5 @@ __all__ = [
     "register_embedding_provider",
     "register_llm_provider",
     "register_rerank_provider",
-    "HashingEmbeddingProvider",
-    "OllamaLLMProvider",
     "register_defaults",
 ]

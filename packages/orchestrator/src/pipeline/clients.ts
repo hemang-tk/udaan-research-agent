@@ -33,6 +33,30 @@ export interface RankingService {
   quality?(): Promise<StageQuality[]>;
 }
 
+export interface AskCitation {
+  n: number;
+  quote: string;
+  doi: string | null;
+  title: string | null;
+}
+export interface AskResult {
+  answer: string;
+  citations: AskCitation[];
+}
+
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+export interface TableRow {
+  doi: string | null;
+  values: Record<string, string>;
+}
+export interface TableResult {
+  columns: TableColumn[];
+  rows: TableRow[];
+}
+
 export interface ParsingService {
   ingest(input: {
     projectId: string;
@@ -40,6 +64,19 @@ export interface ParsingService {
     /** Vault pointer (s3://bucket/key); the parser reads the PDF directly. */
     storagePointer: string;
   }): Promise<IngestResult>;
+  /** RAG chat over a project's stored passages ("ask these papers"). Optional on
+   *  the interface (the pipeline never calls it); the server uses the concrete class. */
+  ask?(input: {
+    projectId: string;
+    question: string;
+    topK?: number;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }): Promise<AskResult>;
+  /** Per-paper extraction table (Elicit-style). Optional, server-only. */
+  table?(input: {
+    projectId: string;
+    columns?: { key: string; label?: string; prompt?: string }[];
+  }): Promise<TableResult>;
   quality?(): Promise<StageQuality[]>;
 }
 
@@ -48,7 +85,24 @@ export interface SynthesisService {
   quality?(): Promise<StageQuality[]>;
 }
 
-async function postJson<T>(url: string, body: unknown, validate: (data: unknown) => T): Promise<T> {
+// Inter-service call timeout. Default is generous because the Python services may
+// run real ML models on CPU (cross-encoder rerank, embeddings) where a request —
+// especially the first, which loads the model — can take far longer than a web call.
+// Override with SERVICE_TIMEOUT_MS for slower/faster hosts.
+const SERVICE_TIMEOUT_MS = Number(process.env.SERVICE_TIMEOUT_MS) || 120_000;
+
+// Per-document ingest (Phase 5) gets its OWN bounded timeout and NO retry: one
+// slow/hung document (huge PDF, LlamaParse stall, rate-limit storm) must not stall
+// the whole run. On timeout it throws, the Phase 5 loop catches it, skips that
+// document, and presses on — so a run always completes. Override with INGEST_TIMEOUT_MS.
+const INGEST_TIMEOUT_MS = Number(process.env.INGEST_TIMEOUT_MS) || 120_000;
+
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  validate: (data: unknown) => T,
+  opts: { timeoutMs?: number; retries?: number } = {},
+): Promise<T> {
   // Inter-service calls are effectively idempotent (rerank/ingest/synthesize for
   // a project), so a bounded retry with timeout is safe and avoids turning a
   // transient blip or a hung service into a hard pipeline failure.
@@ -59,7 +113,7 @@ async function postJson<T>(url: string, body: unknown, validate: (data: unknown)
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     },
-    { timeoutMs: 30_000, retries: 2 },
+    { timeoutMs: opts.timeoutMs ?? SERVICE_TIMEOUT_MS, retries: opts.retries ?? 2 },
   );
   if (!res.ok) throw new Error(`${url} -> ${res.status} ${res.statusText}`);
   // Validate at the boundary: a malformed/changed service response is rejected
@@ -92,7 +146,46 @@ export class HttpRankingService implements RankingService {
 export class HttpParsingService implements ParsingService {
   constructor(private readonly baseUrl: string) {}
   ingest(input: { projectId: string; documentDoi: string | null; storagePointer: string }) {
-    return postJson(`${this.baseUrl}/ingest`, input, validateIngestResult);
+    // Bounded, no-retry: a slow document is abandoned and skipped, never stalls the run.
+    return postJson(`${this.baseUrl}/ingest`, input, validateIngestResult, {
+      timeoutMs: INGEST_TIMEOUT_MS,
+      retries: 0,
+    });
+  }
+  async ask(input: {
+    projectId: string;
+    question: string;
+    topK?: number;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }): Promise<AskResult> {
+    const res = await resilientFetch(
+      `${this.baseUrl}/ask`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: 60_000, retries: 1 },
+    );
+    if (!res.ok) throw new Error(`${this.baseUrl}/ask -> ${res.status} ${res.statusText}`);
+    return (await res.json()) as AskResult;
+  }
+  async table(input: {
+    projectId: string;
+    columns?: { key: string; label?: string; prompt?: string }[];
+  }): Promise<TableResult> {
+    // Generous timeout: one LLM call per paper (no retry — regenerate on demand).
+    const res = await resilientFetch(
+      `${this.baseUrl}/table`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: 120_000, retries: 0 },
+    );
+    if (!res.ok) throw new Error(`${this.baseUrl}/table -> ${res.status} ${res.statusText}`);
+    return (await res.json()) as TableResult;
   }
   quality() {
     return fetchQuality(this.baseUrl);

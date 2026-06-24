@@ -36,3 +36,30 @@ export interface ResearchSummary {
   totalClaims: number;
   sections: number;
 }
+
+/** A passage cited by a chat answer (RAG over the brief's papers). */
+export interface ChatCitation {
+  n: number;
+  quote: string;
+  doi: string | null;
+  title?: string | null;
+}
+
+export interface AskResponse {
+  answer: string;
+  citations: ChatCitation[];
+}
+
+/** Elicit-style per-paper extraction table. */
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+export interface TableRow {
+  doi: string | null;
+  values: Record<string, string>;
+}
+export interface TableResult {
+  columns: TableColumn[];
+  rows: TableRow[];
+}

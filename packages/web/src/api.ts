@@ -1,9 +1,11 @@
 import type {
+  AskResponse,
   PaywalledEntry,
   PipelineResult,
   ProgressEvent,
   ResearchBrief,
   ResearchSummary,
+  TableResult,
 } from "./types.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -73,6 +75,104 @@ export async function getResearch(id: string): Promise<ResearchBrief | null> {
   if (!res.ok) return null;
   const data = (await res.json()) as { result?: { brief?: ResearchBrief } };
   return data.result?.brief ?? null;
+}
+
+/** Full live state of a run — works for in-progress jobs (events, not yet done)
+ *  and finished/persisted ones (result.brief). Lets the detail page render a run
+ *  that is still going AND survive a page reload. */
+export interface ResearchState {
+  done: boolean;
+  projectId?: string;
+  query: string;
+  createdAt?: string;
+  events: ProgressEvent[];
+  paywalled: PaywalledEntry[];
+  result?: PipelineResult;
+  error?: string;
+}
+
+export async function getResearchState(id: string): Promise<ResearchState | null> {
+  const res = await fetch(`${API_BASE}/research/${id}`);
+  if (!res.ok) return null;
+  const d = (await res.json()) as Partial<ResearchState> & { done?: boolean };
+  return {
+    done: !!d.done,
+    projectId: d.projectId,
+    query: d.query ?? "",
+    createdAt: d.createdAt,
+    events: d.events ?? [],
+    paywalled: d.paywalled ?? [],
+    result: d.result,
+    error: d.error,
+  };
+}
+
+export interface ResearchDetail {
+  query: string;
+  createdAt?: string;
+  brief: ResearchBrief;
+  paywalled: PaywalledEntry[];
+}
+
+/** Full record for the detail page: the brief plus its query/date and any
+ *  paywalled sources. Works for both in-memory (just-run) and persisted jobs. */
+export async function getResearchRecord(id: string): Promise<ResearchDetail | null> {
+  const res = await fetch(`${API_BASE}/research/${id}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    query?: string;
+    createdAt?: string;
+    paywalled?: PaywalledEntry[];
+    result?: { brief?: ResearchBrief };
+  };
+  const brief = data.result?.brief;
+  if (!brief) return null;
+  return {
+    query: data.query ?? "",
+    createdAt: data.createdAt,
+    brief,
+    paywalled: data.paywalled ?? [],
+  };
+}
+
+/** Ask a question answered only from this research's papers (RAG). `history` carries
+ *  prior turns so follow-ups ("what about its limits?") resolve conversationally. */
+export async function askResearch(
+  id: string,
+  question: string,
+  history: { role: "user" | "assistant"; content: string }[] = [],
+): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE}/research/${id}/ask`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question, history }),
+  });
+  if (!res.ok) throw new Error(`Ask failed (${res.status})`);
+  return res.json();
+}
+
+/** Cached per-paper extraction table for a research, or null if not generated yet. */
+export async function getResearchTable(id: string): Promise<TableResult | null> {
+  try {
+    const res = await fetch(`${API_BASE}/research/${id}/table`);
+    if (!res.ok) return null;
+    const d = (await res.json()) as { generated?: boolean; table?: TableResult };
+    return d.generated && d.table ? d.table : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Generate (or regenerate) the extraction table — one LLM call per paper. */
+export async function generateResearchTable(id: string): Promise<TableResult> {
+  const res = await fetch(`${API_BASE}/research/${id}/table`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error(`Table failed (${res.status})`);
+  const d = (await res.json()) as { table: TableResult };
+  return d.table;
 }
 
 export async function uploadPdf(input: {

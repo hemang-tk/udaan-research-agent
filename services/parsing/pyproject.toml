@@ -12,11 +12,10 @@ dependencies = [
   "udaan-shared",
 ]
 
-# Heavy/optional stacks. Base install uses pypdf parsing + hashing embeddings
-# + in-memory store, so the pipeline runs offline:
-#   uv sync --extra ml --extra qdrant
+# Hosted-only build: parsing uses the LlamaParse cloud API + Cohere embeddings,
+# so the service stays light (no torch/Docling). Install the storage extras:
+#   uv sync --extra s3 --extra qdrant
 [project.optional-dependencies]
-ml = ["docling>=2.0", "sentence-transformers>=3.0", "torch>=2.2"]
 qdrant = ["qdrant-client>=1.10"]
 s3 = ["boto3>=1.34"]
 

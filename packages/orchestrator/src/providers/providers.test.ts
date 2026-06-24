@@ -119,8 +119,11 @@ describe("GroqLLMProvider", () => {
   });
 
   it("throws on non-ok response", async () => {
-    mockFetch({ error: { message: "rate limit" } }, 429);
-    await expect(provider.complete(MESSAGES)).rejects.toThrow("Groq request failed: 429");
+    // Use a non-retryable status: the provider routes through resilientFetch,
+    // which retries 429/5xx with backoff (that would take seconds). A 400 throws
+    // immediately, so this stays fast and deterministic.
+    mockFetch({ error: { message: "bad request" } }, 400);
+    await expect(provider.complete(MESSAGES)).rejects.toThrow("Groq request failed: 400");
   });
 });
 

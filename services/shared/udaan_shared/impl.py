@@ -1,7 +1,5 @@
 """Concrete default providers for the Python services.
 
-- OllamaLLMProvider: local LLM over HTTP (Qwen2.5 by config). Temperature 0.
-- HashingEmbeddingProvider: deterministic, dependency-free fallback.
 - GeminiLLMProvider: Google AI Studio generateContent.
 - GroqLLMProvider: OpenAI-compatible /chat/completions.
 - AnthropicLLMProvider: Anthropic Messages API.
@@ -12,96 +10,44 @@ All classes are defined before register_defaults() so lambdas can capture them.
 """
 from __future__ import annotations
 
-import hashlib
-import math
 import os
+import time
 
 import httpx
 
 from .config import Config
 from .providers import register_embedding_provider, register_llm_provider
 
-# Bound the chat call so a hung model can't stall the pipeline indefinitely, and
-# retry once on a transient transport error. Override via OLLAMA_TIMEOUT_S.
-_DEFAULT_OLLAMA_TIMEOUT_S = 120.0
-_OLLAMA_RETRIES = 1
+_LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "6"))
 
 
-def _ollama_timeout() -> float:
-    raw = os.environ.get("OLLAMA_TIMEOUT_S")
-    if raw:
+def _post_with_retry(
+    url: str, *, json: dict, headers: dict | None = None, timeout: float = 60.0
+) -> httpx.Response:
+    """POST with bounded exponential backoff on 429 (rate limit) and 5xx/transient
+    errors, honoring a numeric Retry-After. Free LLM tiers (e.g. Groq) rate-limit the
+    per-chunk extraction calls, so without this the pipeline 500s under load."""
+    delay = 1.0
+    for attempt in range(_LLM_MAX_RETRIES + 1):
         try:
-            value = float(raw)
-            if value > 0:
-                return value
-        except ValueError:
-            pass
-    return _DEFAULT_OLLAMA_TIMEOUT_S
-
-
-class OllamaLLMProvider:
-    def __init__(self, ollama_url: str, model: str, timeout_s: float | None = None) -> None:
-        self._url = ollama_url
-        self._model = model
-        self._timeout_s = timeout_s if timeout_s is not None else _ollama_timeout()
-
-    def complete(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        system: str | None = None,
-        json_schema: dict | None = None,
-        max_tokens: int | None = None,
-    ) -> str:
-        full = ([{"role": "system", "content": system}] if system else []) + messages
-        body: dict = {
-            "model": self._model,
-            "messages": full,
-            "stream": False,
-            "options": {"temperature": 0},
-        }
-        if json_schema is not None:
-            body["format"] = "json"
-
-        last_error: Exception | None = None
-        for attempt in range(_OLLAMA_RETRIES + 1):
-            try:
-                resp = httpx.post(f"{self._url}/api/chat", json=body, timeout=self._timeout_s)
+            resp = httpx.post(url, json=json, headers=headers, timeout=timeout)
+        except (httpx.TimeoutException, httpx.TransportError):
+            if attempt == _LLM_MAX_RETRIES:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 30.0)
+            continue
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt == _LLM_MAX_RETRIES:
                 resp.raise_for_status()
-                return resp.json().get("message", {}).get("content", "")
-            except (httpx.TransportError, httpx.HTTPStatusError) as err:
-                # Timeouts/connection resets and 5xx are transient; retry once.
-                status = getattr(getattr(err, "response", None), "status_code", None)
-                if isinstance(err, httpx.HTTPStatusError) and status is not None and status < 500:
-                    raise
-                last_error = err
-                if attempt == _OLLAMA_RETRIES:
-                    break
-        assert last_error is not None
-        raise last_error
-
-
-class HashingEmbeddingProvider:
-    """Hashing-trick embedding (deterministic, offline fallback). Produces
-    semantically meaningless vectors, so a run using it is DEGRADED (issue #17)."""
-
-    # Quality markers read by the service /health probes.
-    degraded = True
-    implementation = "hashing"
-
-    def __init__(self, dim: int = 384) -> None:
-        self.dim = dim
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [self._vec(t) for t in texts]
-
-    def _vec(self, text: str) -> list[float]:
-        vec = [0.0] * self.dim
-        for token in text.lower().split():
-            h = int(hashlib.md5(token.encode("utf-8")).hexdigest(), 16)
-            vec[h % self.dim] += 1.0 if (h >> 8) & 1 else -1.0
-        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
-        return [x / norm for x in vec]
+            ra = resp.headers.get("retry-after")
+            wait = float(ra) if ra and ra.replace(".", "", 1).isdigit() else delay
+            time.sleep(min(wait, 60.0))
+            delay = min(delay * 2, 30.0)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise RuntimeError("unreachable")  # pragma: no cover
 
 
 class GeminiLLMProvider:
@@ -146,10 +92,15 @@ class GeminiLLMProvider:
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self._model}:generateContent?key={self._api_key}"
+            f"{self._model}:generateContent"
         )
-        resp = httpx.post(url, json=body, timeout=60.0)
-        resp.raise_for_status()
+        # Retry on 429 (free-tier RPM) / 5xx with backoff, honouring Retry-After —
+        # Gemini free tiers rate-limit the per-chunk extraction, so a bare POST
+        # fails every ingest (0 claims). Key goes in a header, not the query string,
+        # so it never leaks into request logs / error URLs.
+        resp = _post_with_retry(
+            url, json=body, headers={"x-goog-api-key": self._api_key}, timeout=60.0
+        )
         data = resp.json()
         return (
             data.get("candidates", [{}])[0]
@@ -157,6 +108,50 @@ class GeminiLLMProvider:
             .get("parts", [{}])[0]
             .get("text", "")
         )
+
+
+class MultiLLMProvider:
+    """Round-robin across several LLM providers, failing over on error. Independent
+    free tiers (e.g. Gemini + Groq) share the per-chunk extraction load, so a run
+    only stalls if EVERY provider is rate-limited at once. Each provider keeps its
+    own internal retry; this adds the cross-provider failover."""
+
+    def __init__(
+        self, providers: list, names: list[str] | None = None, *, round_robin: bool = True
+    ) -> None:
+        if not providers:
+            raise ValueError("MultiLLMProvider needs at least one provider")
+        self._providers = providers
+        self._names = names or [type(p).__name__ for p in providers]
+        self._next = 0
+        # round_robin=True spreads load across free tiers (the token-heavy run).
+        # round_robin=False is strict priority: always try providers[0] first and
+        # only fail over on error — used for chat, where we want the free provider
+        # (Groq) first and the paid one (Anthropic) purely as a backstop.
+        self._round_robin = round_robin
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        system: str | None = None,
+        json_schema: dict | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        n = len(self._providers)
+        start = self._next
+        if self._round_robin:
+            self._next = (self._next + 1) % n  # round-robin the starting provider
+        last_error: Exception | None = None
+        for i in range(n):
+            idx = (start + i) % n
+            try:
+                return self._providers[idx].complete(
+                    messages, system=system, json_schema=json_schema, max_tokens=max_tokens
+                )
+            except Exception as err:  # noqa: BLE001 — failover to the next provider
+                last_error = err
+        raise RuntimeError(f"All LLM providers failed ({', '.join(self._names)}): {last_error}")
 
 
 class GroqLLMProvider:
@@ -191,13 +186,12 @@ class GroqLLMProvider:
         if json_schema is not None:
             body["response_format"] = {"type": "json_object"}
 
-        resp = httpx.post(
+        resp = _post_with_retry(
             f"{self._BASE_URL}/chat/completions",
             json=body,
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=60.0,
         )
-        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
 
@@ -234,9 +228,13 @@ class AnthropicLLMProvider:
             "model": self._model,
             "messages": anthropic_messages,
             "max_tokens": max_tokens or 4096,
-            "thinking": {"type": "adaptive"},
-            # ⚠️  NO temperature, NO top_p
+            # ⚠️  NO temperature, NO top_p (400 on Opus 4.x)
         }
+        # Adaptive thinking only where it's valid: Haiku 4.5 doesn't support it (400),
+        # and it cannot be combined with a forced tool_choice (400) — the json_schema
+        # path below forces a tool, so thinking is skipped there too.
+        if json_schema is None and "haiku" not in self._model.lower():
+            payload["thinking"] = {"type": "adaptive"}
         if system:
             payload["system"] = system
 
@@ -251,7 +249,7 @@ class AnthropicLLMProvider:
             ]
             payload["tool_choice"] = {"type": "tool", "name": "__json_output__"}
 
-        resp = httpx.post(
+        resp = _post_with_retry(
             self._API_URL,
             json=payload,
             headers={
@@ -260,7 +258,6 @@ class AnthropicLLMProvider:
             },
             timeout=120.0,
         )
-        resp.raise_for_status()
         content = resp.json().get("content", [])
 
         if json_schema is not None:
@@ -286,10 +283,13 @@ class CohereEmbeddingProvider:
             )
         self._model = "embed-english-v3.0"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], input_type: str = "search_document") -> list[list[float]]:
+        # Stored documents (chunks/claims) use "search_document"; a retrieval query
+        # uses "search_query" — Cohere v3 embeds the two asymmetrically for better
+        # query/document matching.
         resp = httpx.post(
             "https://api.cohere.ai/v1/embed",
-            json={"texts": texts, "model": self._model, "input_type": "search_document"},
+            json={"texts": texts, "model": self._model, "input_type": input_type},
             headers={"Authorization": f"Bearer {self._api_key}"},
             timeout=60.0,
         )
@@ -298,14 +298,6 @@ class CohereEmbeddingProvider:
 
 
 def register_defaults() -> None:
-    register_llm_provider(
-        "ollama",
-        lambda config: OllamaLLMProvider(config.ollama_url, config.llm_model),
-    )
-    register_embedding_provider(
-        "local",
-        lambda config: HashingEmbeddingProvider(),
-    )
     register_llm_provider("gemini", lambda config: GeminiLLMProvider(config))
     register_llm_provider("groq", lambda config: GroqLLMProvider(config))
     register_llm_provider("anthropic", lambda config: AnthropicLLMProvider(config))

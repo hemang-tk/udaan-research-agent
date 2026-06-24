@@ -9,8 +9,13 @@ Phase 1 serves as the ingest gateway for natural language user intent, translati
 ## Implementation Stack (finalized)
 
 - **Language:** TypeScript (Node.js 20) — orchestration spine.
-- **Cache:** Redis (query-hash cache) as a local docker-compose container; URL via env config (no hardcoded host) for deploy portability.
-- **Intent LLM** (behind an LLM-provider interface): free → Google AI Studio **Gemini 2.0 Flash**; local/offline → **Qwen2.5-7B-Instruct** (Q4, Ollama) or `Qwen2.5-3B`. Zero-temperature, JSON-schema output.
+- **Cache:** an in-process query-hash cache (the pipeline runs in a single
+  container, so no external cache service is required). The self-hosted variant —
+  a Redis container — lives on the `local-infra` branch.
+- **Intent LLM** (behind an LLM-provider interface, via `LLM_PROVIDER`): hosted
+  APIs — **Groq / Gemini / Anthropic** (comma-list for round-robin + failover;
+  default `anthropic`). Zero-temperature, JSON-schema output. The self-hosted
+  variant (Ollama-served Qwen2.5) lives on the `local-infra` branch.
 
 ---
 
@@ -72,7 +77,7 @@ A non-blocking validator evaluating incoming requests before hitting downstream 
 
 ### 2.2. Intent Optimization Engine (LLM Context Worker)
 
-A structured, zero-temperature inference step using a fast model (e.g., Gemini 1.5 Flash). It processes the raw query using defensive system constraints to emit a uniform JSON schema.
+A structured, zero-temperature inference step using a fast hosted model (e.g., a Groq or Gemini model). It processes the raw query using defensive system constraints to emit a uniform JSON schema.
 
 * **Concept Isolation:** Splitting compound research questions into discrete sub-concepts.
 * **Temporal and Structural Extraction:** Parsing implicit limits. If the user asks for *"recent breakthroughs since 2024,"* the engine extracts `{"start_year": 2024}`.
@@ -143,7 +148,7 @@ This structured JSON is passed directly to the Phase 2 orchestrator.
 
 ### 4.1. Caching Strategy (Deterministic Optimization)
 
-* **Query Hash Cache:** Before invoking the LLM Context Worker, a SHA-256 hash of the normalized, lowercase `rawQuery` is checked against Redis. If an identical query was compiled within the last 24 hours, the system skips downstream LLM execution and serves the cached `CompiledDiscoveryManifest`.
+* **Query Hash Cache:** Before invoking the LLM Context Worker, a SHA-256 hash of the normalized, lowercase `rawQuery` is checked against an in-process cache. If an identical query was compiled recently, the system skips downstream LLM execution and serves the cached `CompiledDiscoveryManifest`. (On the `local-infra` branch this cache is backed by Redis.)
 
 ### 4.2. Failover and Degraded States
 

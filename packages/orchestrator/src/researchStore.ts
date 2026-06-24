@@ -4,6 +4,7 @@
  */
 import { Pool } from "pg";
 import type { ResearchBrief } from "@udaan/contracts";
+import type { TableResult } from "./pipeline/clients.js";
 
 export interface ResearchSummary {
   id: string;
@@ -25,6 +26,9 @@ export interface ResearchStore {
   save(r: { id: string; query: string; projectId: string; brief: ResearchBrief }): Promise<void>;
   list(): Promise<ResearchSummary[]>;
   get(id: string): Promise<ResearchRecord | null>;
+  /** Cache a generated extraction table so it's computed once, not per view. */
+  saveTable(id: string, data: TableResult): Promise<void>;
+  getTable(id: string): Promise<TableResult | null>;
 }
 
 /** Used when DATABASE_URL is unset — the app runs, History is just empty. */
@@ -34,6 +38,10 @@ const noopStore: ResearchStore = {
     return [];
   },
   async get() {
+    return null;
+  },
+  async saveTable() {},
+  async getTable() {
     return null;
   },
 };
@@ -51,6 +59,15 @@ class PgResearchStore implements ResearchStore {
           brief jsonb NOT NULL,
           created_at timestamptz NOT NULL DEFAULT now()
         )`,
+      )
+      .then(() =>
+        this.pool.query(
+          `CREATE TABLE IF NOT EXISTS research_table (
+            research_id text PRIMARY KEY,
+            data jsonb NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now()
+          )`,
+        ),
       )
       .then(() => undefined);
   }
@@ -98,6 +115,21 @@ class PgResearchStore implements ResearchStore {
       brief: row.brief as ResearchBrief,
       createdAt: new Date(row.created_at).toISOString(),
     };
+  }
+
+  async saveTable(id: string, data: TableResult): Promise<void> {
+    await this.ready;
+    await this.pool.query(
+      `INSERT INTO research_table (research_id, data) VALUES ($1, $2)
+       ON CONFLICT (research_id) DO UPDATE SET data = EXCLUDED.data, created_at = now()`,
+      [id, JSON.stringify(data)],
+    );
+  }
+
+  async getTable(id: string): Promise<TableResult | null> {
+    await this.ready;
+    const res = await this.pool.query(`SELECT data FROM research_table WHERE research_id = $1`, [id]);
+    return res.rows[0] ? (res.rows[0].data as TableResult) : null;
   }
 }
 

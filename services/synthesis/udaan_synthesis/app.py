@@ -40,7 +40,7 @@ def _deps():
         cfg = load_config()
         _llm = create_llm_provider(cfg)
         try:
-            _source = QdrantClaimSource(cfg.qdrant_url)
+            _source = QdrantClaimSource(cfg.qdrant_url, api_key=cfg.qdrant_api_key)
         except Exception:
             _source = InMemoryClaimSource([])
     return _llm, _source

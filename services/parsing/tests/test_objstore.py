@@ -8,7 +8,13 @@ from udaan_parsing.chunking import Chunk
 from udaan_parsing.ingest import ingest_from_pointer
 from udaan_parsing.objstore import InMemoryObjectStore, parse_s3_pointer
 from udaan_parsing.store import InMemoryClaimStore
-from udaan_shared import HashingEmbeddingProvider
+
+
+class FakeEmbedding:
+    """Deterministic, dependency-free 384-dim embedding for tests (no network)."""
+
+    def embed(self, texts: list[str], input_type: str = "search_document") -> list[list[float]]:
+        return [[float(len(t) % 7)] * 384 for t in texts]
 
 
 class StubLLM:
@@ -55,7 +61,7 @@ def test_ingest_from_pointer_reads_bytes_from_injected_store():
         object_store=objstore,
         parse=fake_parse,
         llm=StubLLM(),
-        embed=HashingEmbeddingProvider(),
+        embed=FakeEmbedding(),
         store=InMemoryClaimStore(),
     )
     assert len(claims) == 1
@@ -71,6 +77,6 @@ def test_ingest_from_pointer_raises_when_object_missing():
             object_store=InMemoryObjectStore(),
             parse=fake_parse,
             llm=StubLLM(),
-            embed=HashingEmbeddingProvider(),
+            embed=FakeEmbedding(),
             store=InMemoryClaimStore(),
         )

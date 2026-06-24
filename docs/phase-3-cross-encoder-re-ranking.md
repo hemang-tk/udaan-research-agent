@@ -8,9 +8,14 @@ Phase 3 serves as the intensive validation gate. It accepts the broad deduplicat
 
 ## Implementation Stack (finalized)
 
-- **Language:** Python service (sentence-transformers / ONNX).
-- **Re-ranker** (behind a provider interface): local default → **`BAAI/bge-reranker-base`** (`-large` only when the GPU is otherwise idle); free API → **Cohere `rerank-v3.5`**; CPU fallback → `ms-marco-MiniLM-L-6-v2`.
-- **Hardware note:** dev GPU is **8GB VRAM** (RTX 3070 Ti Laptop). The BullMQ queue runs phases sequentially, so the re-ranker has the GPU to itself when active.
+- **Language:** Python service (FastAPI) — thin wrapper around the hosted re-rank API.
+- **Re-ranker** (behind a `RERANK_PROVIDER` interface): **Cohere `rerank-v3.5`**, a
+  hosted cross-encoder accessed via API. No local model weights or GPU are
+  required on main. The self-hosted variant — a local BGE cross-encoder
+  (`BAAI/bge-reranker-base`/`-large`, `ms-marco-MiniLM-L-6-v2`) with a lexical
+  fallback — lives on the `local-infra` branch.
+- **Execution:** the pipeline runs in-process inside a single container, so Phase
+  3 simply calls the Cohere API; there is no queue or GPU to schedule.
 
 ---
 
@@ -24,7 +29,7 @@ Phase 3 eliminates this noise by shifting from independent vector calculations t
 
 1. **Payload Ingestion:** Receive up to 500 `CandidatePaper` records from Phase 2 alongside the original natural language query from Phase 1.
 2. **Tokenization & Sequence Assembly:** Concatenate the query and each individual abstract with classification and separation tokens into a single sequence matrix.
-3. **Batched Inference Execution:** Route the structured tensor sequences through a highly optimized local inference worker pool running a specialized cross-encoder transformer model.
+3. **Batched Inference Execution:** Send the query/abstract pairs to the hosted Cohere `rerank-v3.5` cross-encoder, which scores each pair under full query-to-document cross-attention.
 4. **Scoring & Normalization:** Extract the raw logits, pass them through a sigmoid activation layer, and assign a deterministic relevance score $[0, 1]$ to each paper.
 5. **Truncation & Stratification:** Sort the array dynamically, filter out papers falling below a defined absolute quality floor, and truncate the output to the top 15–20 definitive candidate records.
 
@@ -41,19 +46,19 @@ Phase 3 eliminates this noise by shifting from independent vector calculations t
                                        ▼
                        ┌───────────────────────────────┐
                        │   Sequence Assembly Engine    │
-                       │   [Query] + [SEP] + [Abstract]│
+                       │   query + each abstract pair  │
                        └───────────────┬───────────────┘
                                        │
                                        ▼
                        ┌───────────────────────────────┐
-                       │   Dynamic Batching Manager    │
-                       │   (GPU/VRAM Safety Governor)  │
+                       │   Request Batching Manager    │
+                       │   (chunk + rate-limit guard)  │
                        └───────────────┬───────────────┘
                                        │
                                        ▼
                        ┌───────────────────────────────┐
-                       │    Local Inference Workers    │
-                       │    (Cross-Encoder Tensor)     │
+                       │  Cohere rerank-v3.5 (hosted)  │
+                       │   (Cross-Encoder via API)     │
                        └───────────────┬───────────────┘
                                        │
                                        ▼
@@ -72,23 +77,21 @@ Phase 3 eliminates this noise by shifting from independent vector calculations t
 
 ### 2.1. Sequence Assembly Engine
 
-This component handles the raw string transformations required by the transformer's tokenization layer.
+This component prepares the query/document pairs the hosted cross-encoder scores.
 
-* **Format Generation:** It strips any trailing structural noise from Phase 2 abstracts and formats the input sequence matrix precisely as required by the model architecture:
-`[CLS] + Query_Tokens + [SEP] + Abstract_Tokens + [SEP]`
-* **Dynamic Padding & Truncation:** To maximize tensor efficiency, sentences are dynamically padded up to the maximum sequence length (typically 512 tokens). Layout-invariant text exceeding this limit is structurally truncated from the end of the abstract.
+* **Format Generation:** It strips any trailing structural noise from Phase 2 abstracts and pairs the original query with each abstract as the `query` + `documents` payload the rerank API expects.
+* **Length Guarding:** Abstracts are trimmed so each document stays within the model's input limit; text exceeding it is truncated from the end of the abstract.
 
-### 2.2. Dynamic Batching Manager
+### 2.2. Request Batching Manager
 
-Cross-encoder inference is computationally expensive. Running 500 forward passes sequentially introduces blocking latency, while dumping all 500 sequences into VRAM simultaneously risks throwing Out-Of-Memory (OOM) exceptions.
+The rerank API is called once per query with the full candidate set, but large pools and free-tier rate limits make naive single-shot calls fragile.
 
-* **Adaptive Batch Sizing:** The manager evaluates available system resources and splits the 500-sequence matrix into optimal processing windows (e.g., micro-batches of 16 or 32 sequences).
-* **Asynchronous Pinning:** Utilizes pinned memory architectures to stream tensor data smoothly from host RAM to GPU VRAM concurrently while the model executes prior batch layers.
+* **Adaptive Chunking:** The manager splits the candidate pool into bounded request windows when the set is large, then merges the scored results.
+* **Rate-Limit Guard:** Requests respect the provider's rate limits with backoff, so a burst of candidates never trips a 429 and stalls the pipeline.
 
 ### 2.3. Scoring & Truncation Engine
 
-* **Logit Extraction:** Captures the raw output from the classification head (`logits[0]`).
-* **Sigmoid Activation:** Maps the raw real-valued logit into a strict scalar probability range between $0.0000$ and $1.0000$.
+* **Score Extraction:** Reads the normalized relevance score the rerank API returns for each document (a scalar in $[0, 1]$); no local logit/sigmoid step is needed.
 * **The Static Floor Filter:** Discards any paper scoring below an absolute relevance value of $0.5000$, classifying it as contextual background noise rather than a direct data match.
 
 ---
@@ -140,44 +143,46 @@ The payload emitted from Phase 3 to drive the Just-In-Time resolution loops in P
 
 ---
 
-## 4. Model Selection & Runtime Execution Optimization
+## 4. Model Selection & Runtime Execution
 
-### 4.1. Model Architecture Selection
+### 4.1. Model Selection
 
-The system utilizes a localized instance of **`BAAI/bge-reranker-large`** or a specialized alternative like **`ms-marco-MiniLM-L-6-v2`** depending on the production host execution profile.
+The system uses **Cohere `rerank-v3.5`**, a hosted cross-encoder, behind the
+`RERANK_PROVIDER` interface. Because the model is served over an API, main carries
+no model weights, no GPU dependency, and no per-host execution profile to tune.
 
-> **Finalized default:** on the 8GB dev GPU, **`bge-reranker-base`** is the default for VRAM headroom; `bge-reranker-large` is used only when the GPU is otherwise idle. A hosted alternative (Cohere `rerank-v3.5`) sits behind the same provider interface.
+* **`rerank-v3.5` (hosted):** a managed cross-encoder that jointly attends over the query and each document, delivering the analytical relevance discrimination Phase 3 needs to compress the wide Phase 2 pool to the top 15–20.
+* **Self-hosted alternatives** (`bge-reranker-base`/`-large`, `ms-marco-MiniLM-L-6-v2`) sit behind the same provider interface on the `local-infra` branch, for offline runs without an API.
 
-* **`bge-reranker-large` (Preferred for GPU):** 335 million parameters. Delivers state-of-the-art multi-lingual accuracy and excellent differentiation of academic reasoning.
-* **`ms-marco-MiniLM-L-6-v2` (Preferred CPU Fallback):** Extremely lightweight, offering high processing velocity with minimal loss in top-20 structural ranking precision.
+### 4.2. Runtime Characteristics
 
-### 4.2. Runtime Acceleration
+Since inference happens on Cohere's infrastructure, Phase 3's runtime cost on main
+is dominated by network round-trips rather than local tensor execution:
 
-To keep processing speeds below critical latency ceilings, the cross-encoder model runs under specific hardware compilation constraints:
-
-* **ONNX Runtime / TensorRT:** The raw PyTorch model weights are compiled into optimized execution graphs (ONNX format or NVIDIA TensorRT engines) to skip dynamic interpreter overhead.
-* **FP16 / INT8 Quantization:** Precision is scaled down from FP32 to mixed FP16 (or INT8 for CPU deployments). This cuts memory bandwidth requirements in half and accelerates inference speeds by up to 300% on compatible hardware without degrading re-ranking accuracy.
+* **Stateless calls:** the service holds no model in memory, so it starts instantly and stays light on the shared HF CPU container.
+* **Throughput via batching:** large candidate pools are chunked across requests (see 2.2) and merged, keeping each call within the provider's size and rate limits.
 
 ---
 
 ## 5. Resilience & Performance Strategies
 
-### 5.1. The VRAM Safety Valve (OOM Recovery)
+### 5.1. Rate-Limit & Payload Recovery
 
-If an exceptional payload layout triggers an unexpected CUDA Out-of-Memory error during batch tokenization, the system executes an automated recovery sequence:
+If a rerank request is rejected for being too large or for tripping a rate limit, the service executes an automated recovery sequence:
 
-1. Immediately flushes the active GPU device cache (`torch.cuda.empty_cache()`).
-2. Scales down the micro-batch size by half (e.g., from 32 down to 16).
-3. Re-attempts inference execution.
-4. If a secondary OOM occurs, execution bypasses the GPU entirely and routes the remaining chunks through an isolated CPU thread execution queue running an INT8-quantized model fallback.
+1. On a 429 / rate-limit signal, it backs off and retries with jitter.
+2. On an oversized-payload error, it halves the request window (fewer documents per call) and re-submits.
+3. Partial results from successful chunks are retained and merged so a single failed window never discards the whole pool.
 
-### 5.2. Graceful Degraded Sorting (Bi-Encoder Fallback)
+### 5.2. Transient-Error Handling
 
-If the local inference worker pool crashes entirely or encounters an unrecoverable structural error:
+If the rerank API is briefly unreachable or returns a transient 5xx:
 
-* The system bypasses Phase 3's attention layer completely.
-* It falls back to calculating basic lexical match densities and Jaccard similarity scores between the query and the abstracts using host CPU memory.
-* The manifestation payload is generated and flagged with a quality warning parameter: `ranking_method: "LEXICAL_FALLBACK"`.
+* The service retries with exponential backoff within the phase's latency budget.
+* On persistent failure it surfaces the error to the pipeline rather than silently degrading, so a run never ships an unranked pool as if it were ranked.
+
+> The self-hosted lexical/bi-encoder degraded-sort fallback lives on the
+> `local-infra` branch, where there is no external API to fall back from.
 
 ---
 
@@ -185,10 +190,10 @@ If the local inference worker pool crashes entirely or encounters an unrecoverab
 
 | Metric | Target Boundary | Validation Vector |
 | --- | --- | --- |
-| **Max Processing Execution Latency** | $\le 2.5\text{s}$ (For 500 documents on GPU) | Worker Inference Profiler |
-| **VRAM Volatility Caps** | $\le 4.0\text{GB}$ peak utilization | Core Hardware Container Telemetry |
+| **Max Processing Execution Latency** | $\le 2.5\text{s}$ (For 500 documents, incl. API round-trips) | Phase Timing Telemetry |
+| **Container Memory Overhead** | Negligible (stateless API client, no model resident) | Container Runtime Telemetry |
 | **Top-20 Ranking Accuracy (NDCG@20)** | $\ge 0.88$ | Ground-truth Evaluation Dataset Audits |
-| **System Exception Fallback Time** | $\le 500\text{ms}$ to trip safety state | Operational Resilience Injection Tests |
+| **Rate-Limit Recovery Time** | $\le 500\text{ms}$ to back off and retry | Operational Resilience Injection Tests |
 
 ---
 

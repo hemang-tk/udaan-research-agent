@@ -1,20 +1,21 @@
+import io
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
-# Minimal env so load_config() succeeds; RERANK_MODEL points at the cross-encoder
-# but sentence-transformers is absent in CI, so the local factory falls back to
-# the lexical reranker.
+# Minimal env so load_config() succeeds. The hosted build reranks via Cohere; the
+# Cohere HTTP call is monkeypatched in the rerank test so no live key is needed.
 REQUIRED_ENV = {
     "QDRANT_URL": "http://localhost:6333",
-    "REDIS_URL": "redis://localhost:6379",
     "S3_ENDPOINT": "http://localhost:9000",
     "S3_BUCKET": "research-vault",
     "S3_ACCESS_KEY": "k",
     "S3_SECRET_KEY": "s",
-    "LLM_MODEL": "qwen2.5:7b-instruct-q4_K_M",
-    "EMBEDDING_MODEL": "BAAI/bge-base-en-v1.5",
-    "RERANK_MODEL": "BAAI/bge-reranker-base",
-    "OLLAMA_URL": "http://localhost:11434",
+    "LLM_MODEL": "claude-haiku-4-5",
+    "EMBEDDING_MODEL": "embed-english-v3.0",
+    "RERANK_MODEL": "rerank-v3.5",
+    "COHERE_API_KEY": "test-key",
     "RANKING_SERVICE_URL": "http://localhost:8001",
     "PARSING_SERVICE_URL": "http://localhost:8002",
     "SYNTHESIS_SERVICE_URL": "http://localhost:8003",
@@ -54,7 +55,27 @@ def test_health(client):
     assert isinstance(stages["rerank"]["degraded"], bool)
 
 
-def test_rerank_endpoint_returns_camelcase_manifest(client):
+def test_rerank_endpoint_returns_camelcase_manifest(client, monkeypatch):
+    # Stub the Cohere rerank HTTP call: rank candidate index 1 ("a") first.
+    body = json.dumps({
+        "results": [
+            {"index": 1, "relevance_score": 0.95},
+            {"index": 0, "relevance_score": 0.05},
+        ]
+    }).encode("utf-8")
+
+    class FakeResp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        "udaan_ranking.reranker.urllib.request.urlopen",
+        lambda *a, **k: FakeResp(body),
+    )
+
     payload = {
         "projectId": "proj_1",
         "originalQuery": "micro caching tail latency",
